@@ -20,28 +20,35 @@ def rgb2gray(img):
         return
     
     ###Your code here###
+    height, width = img.shape[:2]
     RGB2GRAY = lambda RGB : 0.299 * RGB[0] + 0.587 * RGB[1] + 0.114 * RGB[2]
-    img_gray = RGB2GRAY(img).astype("uint8")
+    img_gray = np.zeros(img.shape[:2])
+    for h in range(height):
+        for w in range(width):
+            img_gray[h][w] = np.round(RGB2GRAY(img[h][w]))
     ###
-    return img_gray 
+    img_gray = img_gray.astype(np.uint8)
+    return img_gray
 
 def convolve(img, kernel, k):
     """
     Performs a convolution operation on a image img and kernel of size k. It pads the original image with 0's so that the return image is the same size as the original image.
     :param img: numpy.ndarray
-    :return convolved_image: numpy.ndarray (dtype: np.uint8)
+    :param kernel: numpy.ndarray
+    :param k size of kernel: int
+    :return convolved_image: numpy.ndarray
     """
     padded_image = pad_zeros(img, k, k, k, k)
     height, width = img.shape[:2]
-    convolved_image = np.zeros((height,width))
+    convolved_image = img.astype('float')
     for h in range(k, height + k):
         for w in range(k, width + k):
-            new_pixel = 0
+            new_pixel = 0.0
             for a in range(-k,k+1,1):
                 for b in range(-k, k+1, 1):
-                    new_pixel += padded_image[h - a][w - b] * kernel[a + k][b + k]
+                    new_pixel += padded_image[h + a][w + b] * kernel[k - a][k - b]
             convolved_image[h - k][w - k] = new_pixel
-    return convolved_image.astype("uint8")
+    return convolved_image
 
 def gray2grad(img):
     """
@@ -68,10 +75,11 @@ def gray2grad(img):
                         [2, 1, 0]], dtype = float)
     
     ###Your code here####
-    img_grad_h = convolve(img, sobelh , 1)
-    img_grad_v = convolve(img, sobelv, 1)
-    img_grad_d1 = convolve(img, sobeld1, 1)
-    img_grad_d2 = convolve(img, sobeld2, 1)
+    img_grad = img.astype("float64")
+    img_grad_h = convolve(img_grad, sobelh , 1)
+    img_grad_v = convolve(img_grad, sobelv, 1)
+    img_grad_d1 = convolve(img_grad, sobeld1, 1)
+    img_grad_d2 = convolve(img_grad, sobeld2, 1)
     ###
     return img_grad_h, img_grad_v, img_grad_d1, img_grad_d2
 
@@ -99,8 +107,7 @@ def pad_zeros(img, pad_height_bef, pad_height_aft, pad_width_bef, pad_width_aft)
     for h in range(height):
         for w in range(width):
              img_pad[h + pad_height_bef][w + pad_width_bef] = img[h][w]
-    return img_pad
-
+    return img_pad.astype(img.dtype)
 
 ##### Part 2: Normalized Cross Correlation #####
 def normalized_cross_correlation(img, template):
@@ -181,6 +188,20 @@ def non_max_suppression(response, suppress_range, threshold=None):
     :return res: a sparse response map which has the same shape as response
     """
     ###Your code here###
+    res = np.where(response < threshold, 0 , response) #Set all values below a threshold to 0
+    global_max = np.max(res)
+    height, width = res.shape[:2]
+    H_range, W_range = suppress_range
+    for h in range(height):
+        for w in range(width):
+            if res[h][w] == global_max:  #Centre of Point found
+                for i in range(-H_range, H_range + 1, 1):   #Iterate over neighbouring squares
+                    for j in range(-W_range, W_range + 1, 1):
+                        if i == 0 and j == 0:
+                            continue
+                        else:
+                            res[h + i][w + j] = 0
+
     ###
     return res
 
