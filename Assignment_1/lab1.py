@@ -125,6 +125,54 @@ def normalized_cross_correlation(img, template):
     Wo = Wi - Wk + 1
 
     ###Your code here###
+    
+    # Place target element on top left corner of kernel instead of center
+
+    # Use floats for img and template, otherwise uint8 overflow in later operations
+    img_f = img.astype('float')
+    template_f = template.astype('float')
+
+    # Alternative: np.linalg.norm(template_f)
+    kernel_mag = math.sqrt(np.sum(template_f**2))
+    response = np.zeros((Ho, Wo))
+
+    # GREYSCALE
+    if len(img.shape) == 2:
+        for i in range(Ho):
+            for j in range(Wo):
+                covered_elements = img_f[i:i+Hk, j:j+Wk]
+                covered_mag = math.sqrt(np.sum(covered_elements**2))
+                norm_coefficient = 1 / (kernel_mag * covered_mag)
+                filtered_val = 0.0
+            
+                for k in range(Hk):
+                    for l in range(Wk):
+                        neighbour = img_f[i+k, j+l]
+                        filtered_val += (template_f[k, l] * neighbour)
+
+                response[i, j] = norm_coefficient * filtered_val
+
+    #RGB
+    elif len(img.shape) == 3:
+        for i in range(Ho):
+            for j in range(Wo):
+                covered_elements = img_f[i:i+Hk, j:j+Wk, :]
+                covered_mag = math.sqrt(np.sum(covered_elements**2))
+                norm_coefficient = 1 / (kernel_mag * covered_mag)
+                filtered_val = 0.0
+            
+                for c in range(3):
+                    for k in range(Hk):
+                        for l in range(Wk):
+                            for ct in range(3):
+                                # Can remove one of the channel loops & the continue block, left in for 6 loops
+                                if c != ct:
+                                    continue
+                                neighbour = img_f[i+k, j+l, c]
+                                filtered_val += (template_f[k, l, ct] * neighbour)
+
+                response[i, j] = norm_coefficient * filtered_val
+                
     ###
     return response
 
@@ -144,6 +192,41 @@ def normalized_cross_correlation_fast(img, template):
     Wo = Wi - Wk + 1
 
     ###Your code here###
+    img_f = img.astype('float')
+    template_f = template.astype('float')
+
+    # Alternative: np.linalg.norm(template_f)
+    kernel_mag = math.sqrt(np.sum(template_f**2))
+    response = np.zeros((Ho, Wo))
+
+    # GREYSCALE
+    if len(img.shape) == 2:
+        for i in range(Ho):
+            for j in range(Wo):
+                covered_elements = img_f[i:i+Hk, j:j+Wk]
+                covered_mag = math.sqrt(np.sum(covered_elements**2))
+                norm_coefficient = 1 / (kernel_mag * covered_mag)
+                filtered_val = np.sum(template_f * covered_elements)
+                response[i, j] = norm_coefficient * filtered_val
+
+    #RGB
+    elif len(img.shape) == 3:
+        for i in range(Ho):
+            for j in range(Wo):
+                covered_elements = img_f[i:i+Hk, j:j+Wk, :]
+                covered_mag = math.sqrt(np.sum(covered_elements**2))
+                norm_coefficient = 1 / (kernel_mag * covered_mag)
+                filtered_val = 0.0
+            
+                for c in range(3):
+                    neighbours = covered_elements[:, :, c]
+                    filtered_val += np.sum(template_f[:, :, c] * neighbours)
+
+                # Can remove channel loop and directly use covered_elements & templates 3D array, left in for 3 loops
+                # filtered_val += np.sum(template_f * covered_elements)
+            
+                response[i, j] = norm_coefficient * filtered_val
+
     ###
     return response
 
