@@ -280,10 +280,20 @@ def non_max_suppression(response, suppress_range, threshold=None):
         max_loc = np.where(res == global_max)
         max_loc = (max_loc[0][0], max_loc[1][0])
         max_coord.append(max_loc)
-        H_low = max_loc[0] - int(H_range/2) if max_loc[0] - int(H_range/2) > 0 else 0
-        H_high = max_loc[0] + int(H_range/2) if max_loc[0] + int(H_range/2) < height else height - 1
-        W_low = max_loc[1] - int(W_range/2) if max_loc[1] - int(W_range/2) > 0 else 0
-        W_high = max_loc[1] + int(W_range/2) if max_loc[1] + int(W_range/2) < width else width - 1
+
+        H_low = max_loc[0] - int(H_range/2)
+        H_high = max_loc[0] + int(H_range/2) 
+        if H_low < 0 :
+            H_low = 0
+        if H_high >= height:
+            H_high = height
+
+        W_low = max_loc[1] - int(W_range/2) 
+        W_high = max_loc[1] + int(W_range/2)
+        if W_low < 0 :
+                W_low = 0
+        if W_high >= width:
+            W_high = width
         res[H_low:H_high, W_low:W_high] = np.zeros((H_high - H_low, W_high - W_low))
     ###
     for i in max_coord:
@@ -306,6 +316,44 @@ def normalized_cross_correlation_ms(img, template):
     Wo = Wi - Wk + 1
 
     ###Your code here###
+    img_f = img.astype('float')
+    template_f = template.astype('float')
+
+    # Alternative: np.linalg.norm(template_f)
+    kernel_ms = template_f - np.mean(template_f)
+    kernel_mag = np.linalg.norm(kernel_ms)
+    response = np.zeros((Ho, Wo))
+
+    # GREYSCALE
+    if len(img.shape) == 2:
+        for i in range(Ho):
+            for j in range(Wo):
+                covered_elements = img_f[i:i+Hk, j:j+Wk]
+                covered_elements_ms = covered_elements - np.mean(covered_elements)
+                covered_mag = np.linalg.norm(covered_elements_ms)
+                norm_coefficient = 1 / (kernel_mag * covered_mag)
+                filtered_val = np.sum(kernel_ms * covered_elements_ms)
+                response[i, j] = norm_coefficient * filtered_val
+
+    #RGB
+    elif len(img.shape) == 3:
+        for i in range(Ho):
+            for j in range(Wo):
+                covered_elements = img_f[i:i+Hk, j:j+Wk, :]
+                R_mean = np.mean(covered_elements[:, :, 0])
+                G_mean = np.mean(covered_elements[:, :, 1])
+                B_mean = np.mean(covered_elements[:, :, 2])
+                covered_elements_ms = covered_elements - [R_mean, G_mean, B_mean]
+                covered_mag = math.sqrt(np.sum(covered_elements_ms**2))
+                norm_coefficient = 1 / (kernel_mag * covered_mag)
+                filtered_val = 0.0
+            
+                for c in range(3):
+                    neighbours = covered_elements_ms[:, :, c]
+                    filtered_val += np.sum(kernel_ms[:, :, c] * neighbours)
+                # Can remove channel loop and directly use covered_elements & templates 3D array, left in for 3 loops
+                # filtered_val += np.sum(template_f * covered_elements)
+                response[i, j] = norm_coefficient * filtered_val
     ###
     return response
 
@@ -371,22 +419,3 @@ def show_img_with_squares(response, img_ori=None, rec_shape=None):
         show_imgs([response, img_ori])
     else:
         show_imgs(response)
-
-
-
-data_dir = 'inputs'
-filename = 'holes.jpg'
-img = read_img(os.path.join(data_dir, filename))
-template = img[22:52, 22:52]
-
-# pad zeros to the image
-pad_height_bef, pad_height_aft = template.shape[0] // 2 - (1 if template.shape[0] % 2 == 0 else 0), template.shape[0] // 2
-pad_width_bef, pad_width_aft = template.shape[1] // 2 - (1 if template.shape[1] % 2 == 0 else 0), template.shape[1] // 2
-img_pad = pad_zeros(img, pad_height_bef, pad_height_aft, pad_width_bef, pad_width_aft)
-
-# perform template matching
-response = normalized_cross_correlation_fast(img_pad, template)
-
-show_imgs([img, template, response])
-
-res = non_max_suppression(response, (int(template.shape[0] * 0.8), int(template.shape[1] * 0.8)), threshold=0.9)
