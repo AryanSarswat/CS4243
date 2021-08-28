@@ -248,6 +248,55 @@ def normalized_cross_correlation_matrix(img, template):
     Wo = Wi - Wk + 1
 
     ###Your code here###
+    img_f = img.astype('float')
+    template_f = template.astype('float')
+
+    # Alternative: np.linalg.norm(template_f)
+    kernel_mag = math.sqrt(np.sum(template_f**2))
+    num_channels = 3 if len(img.shape) == 3 else 1
+
+    template_r = np.zeros((num_channels*Hk*Wk, 1))    
+    input_r = np.zeros((Ho*Wo, num_channels*Hk*Wk))
+    reshape_col_count = 0
+
+    ### Matrix reshaping
+
+    # GREYSCALE
+    if len(img.shape) == 2:
+        template_r = [[t] for t in template.flatten()]
+        # template_r = np.reshape(template, (Hk*Wk, 1))
+        for i in range(Hk):
+            for j in range(Wk):
+                input_r[:, reshape_col_count] = img_f[i:i+Ho, j:j+Wo].flatten()
+                reshape_col_count += 1
+
+    # RGB
+    elif len(img.shape) == 3:
+        template_r_len = Hk*Wk
+        template_r[:template_r_len, 0] = template[:, :, 0].flatten()
+        template_r[template_r_len:2*template_r_len, 0] = template[:, :, 1].flatten()
+        template_r[2*template_r_len:, 0] = template[:, :, 2].flatten()
+        
+        for c in range(3):
+            for i in range(Hk):
+                for j in range(Wk):
+                    input_r[:, reshape_col_count] = img_f[i:i+Ho, j:j+Wo, c].flatten()
+                    reshape_col_count += 1
+        
+    #####################
+
+    # Magnitude of covers matrix
+    ones_kernel = np.ones((num_channels*Hk*Wk, 1))
+    input_squared = input_r**2
+    cover_square_sums = np.matmul(input_squared, ones_kernel)
+    cover_mags = np.sqrt(cover_square_sums)
+
+    # Calculate final results
+    response_r = np.matmul(input_r, template_r) # or numpy.dot
+    response_initial = (1 / (kernel_mag * cover_mags)) * response_r
+    # Reshape the Ho*Wo by 1 matrix into Ho by Wo matrix
+    response = np.reshape(response_initial, (Ho, Wo))
+
     ###
     return response
 
