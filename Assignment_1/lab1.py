@@ -27,7 +27,7 @@ def rgb2gray(img):
         for w in range(width):
             img_gray[h][w] = np.round(RGB2GRAY(img[h][w]))
     ###
-    img_gray = img_gray.astype(np.uint8)
+    img_gray = img_gray.astype('uint8')
     return img_gray
 
 def convolve(img, kernel, k):
@@ -75,7 +75,7 @@ def gray2grad(img):
                         [2, 1, 0]], dtype = float)
     
     ###Your code here####
-    img_grad = img.astype("float64")
+    img_grad = img.astype('float')
     img_grad_h = convolve(img_grad, sobelh , 1)
     img_grad_v = convolve(img_grad, sobelv, 1)
     img_grad_d1 = convolve(img_grad, sobeld1, 1)
@@ -272,24 +272,25 @@ def non_max_suppression(response, suppress_range, threshold=None):
     """
     ###Your code here###
     res = np.where(response < threshold, 0 , response) #Set all values below a threshold to 0
-    global_max = np.max(res)
     height, width = res.shape[:2]
     H_range, W_range = suppress_range
-    for h in range(height):
-        for w in range(width):
-            if res[h][w] == global_max:  #Centre of Point found
-                for i in range(-H_range, H_range + 1, 1):   #Iterate over neighbouring squares
-                    for j in range(-W_range, W_range + 1, 1):
-                        if i == 0 and j == 0:
-                            continue
-                        else:
-                            res[h + i][w + j] = 0
-
+    max_coord = []
+    while (np.count_nonzero(res) > 0):
+        global_max = np.max(res)
+        max_loc = np.where(res == global_max)
+        max_loc = (max_loc[0][0], max_loc[1][0])
+        max_coord.append(max_loc)
+        H_low = max_loc[0] - int(H_range/2) if max_loc[0] - int(H_range/2) > 0 else 0
+        H_high = max_loc[0] + int(H_range/2) if max_loc[0] + int(H_range/2) < height else height - 1
+        W_low = max_loc[1] - int(W_range/2) if max_loc[1] - int(W_range/2) > 0 else 0
+        W_high = max_loc[1] + int(W_range/2) if max_loc[1] + int(W_range/2) < width else width - 1
+        res[H_low:H_high, W_low:W_high] = np.zeros((H_high - H_low, W_high - W_low))
     ###
+    for i in max_coord:
+        res[i[0],i[1]] = 1
     return res
 
 ##### Part 4: Question And Answer #####
-    
 def normalized_cross_correlation_ms(img, template):
     """
     10 points
@@ -371,3 +372,21 @@ def show_img_with_squares(response, img_ori=None, rec_shape=None):
     else:
         show_imgs(response)
 
+
+
+data_dir = 'inputs'
+filename = 'holes.jpg'
+img = read_img(os.path.join(data_dir, filename))
+template = img[22:52, 22:52]
+
+# pad zeros to the image
+pad_height_bef, pad_height_aft = template.shape[0] // 2 - (1 if template.shape[0] % 2 == 0 else 0), template.shape[0] // 2
+pad_width_bef, pad_width_aft = template.shape[1] // 2 - (1 if template.shape[1] % 2 == 0 else 0), template.shape[1] // 2
+img_pad = pad_zeros(img, pad_height_bef, pad_height_aft, pad_width_bef, pad_width_aft)
+
+# perform template matching
+response = normalized_cross_correlation_fast(img_pad, template)
+
+show_imgs([img, template, response])
+
+res = non_max_suppression(response, (int(template.shape[0] * 0.8), int(template.shape[1] * 0.8)), threshold=0.9)
