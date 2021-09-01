@@ -367,16 +367,13 @@ def normalized_cross_correlation_ms(img, template):
     ###Your code here###
     img_f = img.astype('float')
     template_f = template.astype('float')
-
-    r_mean = np.mean(template_f[:, :, 0])
-    g_mean = np.mean(template_f[:, :, 1])
-    b_mean = np.mean(template_f[:, :, 2])
-    kernel_ms = template_f - [r_mean, g_mean, b_mean]
-    kernel_mag = np.linalg.norm(kernel_ms)
     response = np.zeros((Ho, Wo))
 
     # GREYSCALE
     if len(img.shape) == 2:
+        kernel_ms = template_f - np.mean(template_f)
+        kernel_mag = np.linalg.norm(kernel_ms)
+        
         for i in range(Ho):
             for j in range(Wo):
                 covered_elements = img_f[i:i+Hk, j:j+Wk]
@@ -388,6 +385,12 @@ def normalized_cross_correlation_ms(img, template):
 
     #RGB
     elif len(img.shape) == 3:
+        r_mean = np.mean(template_f[:, :, 0])
+        g_mean = np.mean(template_f[:, :, 1])
+        b_mean = np.mean(template_f[:, :, 2])
+        kernel_ms = template_f - [r_mean, g_mean, b_mean]
+        kernel_mag = np.linalg.norm(kernel_ms)
+        
         for i in range(Ho):
             for j in range(Wo):
                 covered_elements = img_f[i:i+Hk, j:j+Wk, :]
