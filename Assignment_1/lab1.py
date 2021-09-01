@@ -368,11 +368,16 @@ def normalized_cross_correlation_ms(img, template):
     img_f = img.astype('float')
     template_f = template.astype('float')
 
-    r_mean = np.mean(template_f[:, :, 0])
-    g_mean = np.mean(template_f[:, :, 1])
-    b_mean = np.mean(template_f[:, :, 2])
-    kernel_ms = template_f - [r_mean, g_mean, b_mean]
-    kernel_mag = np.linalg.norm(kernel_ms)
+    if len(kernel.shape == 3) :
+        r_mean = np.mean(template_f[:, :, 0])
+        g_mean = np.mean(template_f[:, :, 1])
+        b_mean = np.mean(template_f[:, :, 2])
+        kernel_ms = template_f - [r_mean, g_mean, b_mean]
+        kernel_mag = np.linalg.norm(kernel_ms)
+    elif len(kernel.shape == 2) :
+        kernel_ms = template_f - np.mean(template_f)
+        kernel_mag = np.linalg.norm(kernel_ms)
+    
     response = np.zeros((Ho, Wo))
 
     # GREYSCALE
