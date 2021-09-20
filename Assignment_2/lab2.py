@@ -420,7 +420,7 @@ def edge_linking(weak, strong, n=200, display=True):
 
     # YOUR CODE HERE
     x_limit, y_limit = strong.shape
-    for iteration in range(200):
+    for iteration in range(n):
         added = False
 
         x_ind, y_ind = np.where(strong == 1)
