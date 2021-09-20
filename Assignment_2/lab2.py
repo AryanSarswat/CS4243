@@ -378,7 +378,9 @@ def double_thresholding(inp, perc_weak=0.1, perc_strong=0.3, display=True):
     low_threshold = min_val + perc_weak * delta
 
     strong_edges = np.where(inp > high_threshold, 1, 0)
-    weak_edges = np.where(low_threshold < inp < high_threshold, 1, 0)
+    weak_edges = np.where(low_threshold < inp, 1, 0)
+    weak_edges = weak_edges - strong_edges
+    weak_edges = np.where(weak_edges >= 0, weak_edges, 0)
     # END
 
     if display:
