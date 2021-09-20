@@ -1,6 +1,8 @@
+from skimage.draw import circle_perimeter
+from skimage.feature import peak_local_max
 import math
 import numpy as np
-import cv2 
+import cv2
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
@@ -21,14 +23,25 @@ def make_gaussian_kernel(ksize, sigma):
     :param sigma: float
     :return kernel: numpy.ndarray of shape (ksize, ksize)
     '''
-    
-    # YOUR CODE HERE
 
+    # YOUR CODE HERE
+    if ksize % 2 == 0:
+        x_mean = y_mean = (ksize // 2) + 1
+    else:
+        x_mean = y_mean = ksize // 2
+
+    def k(x, y): return np.exp(((x-x_mean)**2 + (y-y_mean)**2)/(-2*(sigma**2)))
+    kernel = np.zeros((ksize, ksize))
+    for x in range(ksize):
+        for y in range(ksize):
+            kernel[x][y] = k(x, y)
     # END
 
     return kernel / kernel.sum()
 
 # GIVEN
+
+
 def cs4243_filter(image, kernel):
     """
     Fast version of filtering algorithm.
@@ -41,42 +54,46 @@ def cs4243_filter(image, kernel):
     :return filtered_image: numpy.ndarray
     """
     def cs4243_rotate180(kernel):
-        kernel = np.flip(np.flip(kernel, 0),1)
+        kernel = np.flip(np.flip(kernel, 0), 1)
         return kernel
-    
+
     def img2col(input, h_out, w_out, h_k, w_k, stride):
         h, w = input.shape
         out = np.zeros((h_out*w_out, h_k*w_k))
-        
+
         convwIdx = 0
         convhIdx = 0
         for k in range(h_out*w_out):
             if convwIdx + w_k > w:
                 convwIdx = 0
                 convhIdx += stride
-            out[k] = input[convhIdx:convhIdx+h_k, convwIdx:convwIdx+w_k].flatten()
+            out[k] = input[convhIdx:convhIdx+h_k,
+                           convwIdx:convwIdx+w_k].flatten()
             convwIdx += stride
         return out
-    
+
     Hi, Wi = image.shape
     Hk, Wk = kernel.shape
     if Hk % 2 == 0 or Wk % 2 == 0:
         raise ValueError
-        
+
     hkmid = Hk//2
     wkmid = Wk//2
 
-    image = cv2.copyMakeBorder(image, hkmid, hkmid, wkmid, wkmid, cv2.BORDER_REFLECT)
+    image = cv2.copyMakeBorder(
+        image, hkmid, hkmid, wkmid, wkmid, cv2.BORDER_REFLECT)
     filtered_image = np.zeros((Hi, Wi))
     kernel = cs4243_rotate180(kernel)
     col = img2col(image, Hi, Wi, Hk, Wk, 1)
     kernel_flatten = kernel.reshape(Hk*Wk, 1)
-    output = col @ kernel_flatten 
+    output = col @ kernel_flatten
     filtered_image = output.reshape(Hi, Wi)
-    
+
     return filtered_image
 
 # GIVEN
+
+
 def cs4243_blur(img, gaussian_kernel, display=True):
     '''
     Performing Gaussian blurring on an image using a Gaussian kernel.
@@ -88,50 +105,51 @@ def cs4243_blur(img, gaussian_kernel, display=True):
     blurred_img = cs4243_filter(img, gaussian_kernel)
 
     if display:
-
         fig1, axes_array = plt.subplots(1, 2)
-        fig1.set_size_inches(8,4)
-        image_plot = axes_array[0].imshow(img,cmap=plt.cm.gray) 
+        fig1.set_size_inches(8, 4)
+        image_plot = axes_array[0].imshow(img, cmap=plt.cm.gray)
         axes_array[0].axis('off')
         axes_array[0].set(title='Original Image')
-        image_plot = axes_array[1].imshow(blurred_img,cmap=plt.cm.gray)
+        image_plot = axes_array[1].imshow(blurred_img, cmap=plt.cm.gray)
         axes_array[1].axis('off')
         axes_array[1].set(title='Filtered Image')
-        plt.show()  
+        plt.show()
     return blurred_img
 
 # 2 IMPLEMENT
+
+
 def estimate_gradients(original_img, display=True):
     '''
     Compute gradient orientation and magnitude for the input image.
     Perform the following steps:
-    
+
     1. Compute dx and dy, responses to the vertical and horizontal Sobel kernel. Make use of the cs4243_filter function.
-    
+
     2. Compute the gradient magnitude which is equal to sqrt(dx^2 + dy^2) 
-    
+
     3. Compute the gradient orientation using the following formula:
         gradient = atan2(dy/dx)
-        
+
     You may want to divide the original image pixel value by 255 to prevent overflow.
-    
+
     Note that our axis choice is as follows:
             --> y
             |   
             ↓ x    
     Where img[x,y] denotes point on the image at coordinate (x,y)
-    
+
     :param original_img: original grayscale image
     :return d_mag: gradient magnitudes matrix
     :return d_angle: gradient orientation matrix (in radian)
     '''
-    
+
     dx = None
     dy = None
     d_mag = None
     d_angle = None
-    
-    # YOUR CODE HERE 
+
+    # YOUR CODE HERE
     '''
     HINT:
     In the lecture, 
@@ -156,32 +174,52 @@ def estimate_gradients(original_img, display=True):
  
     This is because x direction is the downward line.
     '''
+    Kx = np.array(
+        [[1,  2,  1],
+         [0,  0,  0],
+         [-1, -2, -1]]
+    )
+
+    Ky = np.array(
+        [[1,  0, -1],
+         [2,  0, -2],
+         [1,  0, -1]]
+    )
+
+    normalized = original_img / 255.0
+    dx = cs4243_filter(normalized, Kx)
+    dy = cs4243_filter(normalized, Ky)
+
+    d_mag = np.sqrt((dx**2) + (dy**2)) * 255.0
+    d_angle = np.arctan2(dy,dx)
 
     # END
     if display:
-    
+
         fig2, axes_array = plt.subplots(1, 4)
-        fig2.set_size_inches(16,4)
-        image_plot = axes_array[0].imshow(d_mag, cmap='gray')  
+        fig2.set_size_inches(16, 4)
+        image_plot = axes_array[0].imshow(d_mag, cmap='gray')
         axes_array[0].axis('off')
         axes_array[0].set(title='Gradient Magnitude')
 
-        image_plot = axes_array[1].imshow(dx, cmap='gray')  
+        image_plot = axes_array[1].imshow(dx, cmap='gray')
         axes_array[1].axis('off')
         axes_array[1].set(title='dX')
 
-        image_plot = axes_array[2].imshow(dy, cmap='gray')  
+        image_plot = axes_array[2].imshow(dy, cmap='gray')
         axes_array[2].axis('off')
         axes_array[2].set(title='dY')
 
-        image_plot = axes_array[3].imshow(d_angle, cmap='gray')  
+        image_plot = axes_array[3].imshow(d_angle, cmap='gray')
         axes_array[3].axis('off')
         axes_array[3].set(title='Gradient Direction')
         plt.show()
-    
+
     return d_mag, d_angle
 
 # 3a IMPLEMENT
+
+
 def non_maximum_suppression(d_mag, d_angle, display=True):
     '''
     Perform non-maximum suppression on the gradient magnitude matrix without interpolation.
@@ -199,12 +237,12 @@ def non_maximum_suppression(d_mag, d_angle, display=True):
               /|\    
              x X x 
          -22.5 0 22.5
-         
+
     For instance, in the example above if the orientation at the coordinate of interest (x,y) is 20°, it belongs to the -22.5°~22.5° range, and the two pixels to be compared with are at (x+1,y) and (x-1,y) (aka the two big X's). If the angle was instead 40°, it belongs to the 22.5°-67.5° and the two pixels we need to consider will be (x+1, y+1) and (x-1,y-1)
-    
+
     There are only 4 sets of offsets: (0,1), (1,0), (1,1), and (1,-1), since to find the second pixel offset you just need 
     to multiply the first tuple by -1.
-    
+
     :param d_mag: gradient magnitudes matrix
     :param d_angle: gradient orientation matrix (in radian)
     :return out: non-maximum suppressed image
@@ -213,18 +251,45 @@ def non_maximum_suppression(d_mag, d_angle, display=True):
     out = np.zeros(d_mag.shape, d_mag.dtype)
     # Change angles to degrees to improve quality of life
     d_angle_180 = d_angle * 180/np.pi
- 
+
     # YOUR CODE HERE
+    x_range, y_range = out.shape
+    for x in range(1, x_range - 1):
+        for y in range(1, y_range -1):
+            angle = d_angle_180[x][y]
+            check = d_mag[x][y]
+            if -22.5 <= angle < 22.5 or 157.5 <= angle <= 180 or -180 <= angle < -157.5:
+                check1 = d_mag[x][y + 1]
+                check2 = d_mag[x][y - 1]
+                if check > check1 and check > check2:
+                    out[x][y] = check
+            elif -67.5 <= angle < -22.5 or 112.5 <= angle < 157.5:
+                check1 = d_mag[x - 1][y + 1]
+                check2 = d_mag[x + 1][y - 1]
+                if check > check1 and check > check2:
+                    out[x][y] = check
+            elif -112.5 <= angle < -67.5 or 67.5 <= angle < 112.5:
+                check1 = d_mag[x + 1][y]
+                check2 = d_mag[x - 1][y]
+                if check > check1 and check > check2:
+                    out[x][y] = check
+            else: # -157.5 <= angle < -112.5 or 22.5 <= angle < 67.5
+                check1 = d_mag[x + 1][y + 1]
+                check2 = d_mag[x - 1][y - 1]
+                if check > check1 and check > check2:
+                    out[x][y] = check
 
     # END
     if display:
-        _ = plt.figure(figsize=(10,10))
+        _ = plt.figure(figsize=(10, 10))
         plt.imshow(out)
         plt.title("Suppressed image (without interpolation)")
-    
+
     return out
 
 # 3b IMPLEMENT
+
+
 def non_maximum_suppression_interpol(d_mag, d_angle, display=True):
     '''
     Perform non-maximum suppression on the gradient magnitude matrix with interpolation.
@@ -235,26 +300,68 @@ def non_maximum_suppression_interpol(d_mag, d_angle, display=True):
 
     out = np.zeros(d_mag.shape, d_mag.dtype)
     d_angle_180 = d_angle * 180/np.pi
-    
-    # YOUR CODE HERE
 
+    # YOUR CODE HERE
+    x_range, y_range = out.shape
+    for x in range(1, x_range - 1):
+        for y in range(1, y_range - 1):
+            angle = d_angle_180[x][y]
+            if 0 <= abs(angle) <= 45:
+                if angle >= 0:
+                    factor = np.tan((angle/180)*np.pi)
+                    check = d_mag[x][y]
+                    check1 = factor * (d_mag[x + 1][y + 1] - d_mag[x][y + 1]) + d_mag[x][y + 1]
+                    check2 = factor * (d_mag[x - 1][y - 1] - d_mag[x][y - 1]) + d_mag[x][y - 1]
+                    if check > check1 and check > check2:
+                        out[x][y] = check
+                else:
+                    factor = -np.tan((angle/180)*np.pi)
+                    check = d_mag[x][y]
+                    check1 = factor * (d_mag[x - 1][y + 1] - d_mag[x][y + 1]) + d_mag[x][y + 1]
+                    check2 = factor * (d_mag[x + 1][y - 1] - d_mag[x][y - 1]) + d_mag[x][y - 1]
+                    if check > check1 and check > check2:
+                        out[x][y] = check
+            elif 45 < abs(angle) < 90: 
+                if angle > 0:
+                    angle = 90 - angle
+                    factor = np.tan((angle/180)*np.pi)
+                    check = d_mag[x][y]
+                    check1 = factor * (d_mag[x + 1][y + 1] - d_mag[x + 1][y]) + d_mag[x + 1][y]
+                    check2 = factor * (d_mag[x - 1][y - 1] - d_mag[x - 1][y]) + d_mag[x - 1][y]
+                    if check > check1 and check > check2:
+                        out[x][y] = check
+                else:
+                    factor = -np.tan((angle/180)*np.pi)
+                    check = d_mag[x][y]
+                    check1 = factor * (d_mag[x + 1][y - 1] - d_mag[x + 1][y]) + d_mag[x + 1][y]
+                    check2 = factor * (d_mag[x - 1][y + 1] - d_mag[x - 1][y]) + d_mag[x - 1][y]
+                    if check > check1 and check > check2:
+                        out[x][y] = check
+            else:
+                check = d_mag[x][y]
+                check1 = d_mag[x + 1][y]
+                check2 = d_mag[x - 1][y]
+                if check > check1 and check > check2:
+                        out[x][y] = check               
     # END
     if display:
-        _ = plt.figure(figsize=(10,10))
+        _ = plt.figure(figsize=(10, 10))
         plt.imshow(out, cmap='gray')
         plt.title("Suppressed image (with interpolation)")
-    
+
     return out
 
 # 4 IMPLEMENT
+
+
 def double_thresholding(inp, perc_weak=0.1, perc_strong=0.3, display=True):
     '''
     Perform double thresholding. Use on the output of NMS. The high and low thresholds are computed as follow:
-    
+
     delta = max_val - min_val
     high_threshold = min_val + perc_strong * delta 
     low_threshold = min_val + perc_weak * delta
-    
+
     perc_weak being 0 is possible
     Do note that the return edge images should be binary (0-1 or True-False)
     :param inp: numpy.ndarray
@@ -263,26 +370,34 @@ def double_thresholding(inp, perc_weak=0.1, perc_strong=0.3, display=True):
     :return weak_edges, strong_edges: binary edge images
     '''
     weak_edges = strong_edges = None
-    
+
     # YOUR CODE HERE
-    
+    min_val, max_val = np.min(inp), np.max(inp)
+    delta = max_val - min_val
+    high_threshold = min_val + perc_strong * delta 
+    low_threshold = min_val + perc_weak * delta
+
+    strong_edges = np.where(inp > high_threshold, 1, 0)
+    weak_edges = np.where(low_threshold < inp < high_threshold, 1, 0)
     # END
-    
+
     if display:
 
         fig2, axes_array = plt.subplots(1, 2)
-        fig2.set_size_inches(10,5)
-        image_plot = axes_array[0].imshow(strong_edges, cmap='gray')  
+        fig2.set_size_inches(10, 5)
+        image_plot = axes_array[0].imshow(strong_edges, cmap='gray')
         axes_array[0].axis('off')
         axes_array[0].set(title='Strong ')
 
-        image_plot = axes_array[1].imshow(weak_edges, cmap='gray')  
+        image_plot = axes_array[1].imshow(weak_edges, cmap='gray')
         axes_array[1].axis('off')
         axes_array[1].set(title='Weak')
-        
+
     return weak_edges, strong_edges
 
 # 5 IMPLEMENT
+
+
 def edge_linking(weak, strong, n=200, display=True):
     '''
     Perform edge-linking on two binary weak and strong edge images. 
@@ -290,7 +405,7 @@ def edge_linking(weak, strong, n=200, display=True):
     You may want to avoid using loops directly due to the high computational cost. One possible trick is to generate
     8 2D arrays from the strong edge image by offseting and sum them together; entries larger than 0 mean that at least one surrounding
     pixel is a strong edge pixel (otherwise the sum would be 0).
-    
+
     You may also want to limit the number of iterations (test with 10-20 iterations first to check your implementation speed), and use a stopping condition (stop if no more pixel is added to the strong edge image).
     Also, when a weak edge pixel is added to the strong set, remember to remove it.
 
@@ -300,22 +415,41 @@ def edge_linking(weak, strong, n=200, display=True):
     :param n: maximum number of iterations
     :return out: final edge image
     '''
-    assert weak.shape == strong.shape, \
-        "Weak and strong edge image have to have the same dimension"
+    assert weak.shape == strong.shape, "Weak and strong edge image have to have the same dimension"
     out = None
-    
+
     # YOUR CODE HERE
-    
+    x_limit, y_limit = strong.shape
+    for iteration in range(200):
+        added = False
+
+        x_ind, y_ind = np.where(strong == 1)
+
+        for ind in zip(x_ind, y_ind):
+            neighbors = [(ind[0], ind[1] + 1), (ind[0] + 1, ind[1]), (ind[0] + 1, ind[1] + 1), (ind[0], ind[1] - 1), (ind[0] - 1, ind[1]), (ind[0] - 1, ind[1] - 1) ,
+            (ind[0] - 1, ind[1] + 1), (ind[0] + 1, ind[1] - 1)]
+
+            for neighbor_ind in neighbors:
+                if 0 <= neighbor_ind[0] < x_limit and 0 <= neighbor_ind[1] < y_limit:
+                    if weak[neighbor_ind[0]][neighbor_ind[1]] == 1:
+                        added = True
+                        strong[neighbor_ind[0]][neighbor_ind[1]] = 1
+                        weak[neighbor_ind[0]][neighbor_ind[1]] = 0
+        if not added:
+            break
+    out = strong
     # END
     if display:
-        _ = plt.figure(figsize=(10,10))
-        plt.imshow(s)
+        _ = plt.figure(figsize=(10, 10))
+        plt.imshow(out)
         plt.title("Edge image")
     return out
 
 ##################### TASK 2 ######################
 
 # 1/2/3 IMPLEMENT
+
+
 def hough_vote_lines(img):
     '''
     Use the edge image to vote for 2 parameters: distance and theta
@@ -331,11 +465,13 @@ def hough_vote_lines(img):
     # YOUR CODE HERE
 
     # END
-            
+
     return A, distances, thetas
 
+
 # 4 GIVEN
-from skimage.feature import peak_local_max
+
+
 def find_peak_params(hspace, params_list,  window_size=1, threshold=0.5):
     '''
     Given a Hough space and a list of parameters range, compute the local peaks
@@ -343,7 +479,7 @@ def find_peak_params(hspace, params_list,  window_size=1, threshold=0.5):
     over a space of size (2*window_size+1)^(number of parameters).
 
     Also include the array of values corresponding to the bins, in descending order.
-    
+
     e.g.
     Suppose for a line detection case, you get the following output:
     [
@@ -354,13 +490,13 @@ def find_peak_params(hspace, params_list,  window_size=1, threshold=0.5):
     This means that the local maxima with the highest vote gets a vote score of 122, and the corresponding parameter value is distance=3, 
     theta = 0.
     '''
-    assert len(hspace.shape) == len(params_list), \
-        "The Hough space dimension does not match the number of parameters"
+    assert len(hspace.shape) == len(params_list), "The Hough space dimension does not match the number of parameters"
     for i in range(len(params_list)):
-        assert hspace.shape[i] == len(params_list[i]), \
-            f"Parameter length does not match size of the corresponding dimension:{len(params_list[i])} vs {hspace.shape[i]}"
-    peaks_indices = peak_local_max(hspace.copy(), exclude_border=False, threshold_rel=threshold, min_distance=window_size)
-    peak_values = np.array([hspace[tuple(peaks_indices[j])] for j in range(len(peaks_indices))])
+        assert hspace.shape[i] == len(params_list[i]), f"Parameter length does not match size of the corresponding dimension:{len(params_list[i])} vs {hspace.shape[i]}"
+    peaks_indices = peak_local_max(hspace.copy(
+    ), exclude_border=False, threshold_rel=threshold, min_distance=window_size)
+    peak_values = np.array([hspace[tuple(peaks_indices[j])]
+                           for j in range(len(peaks_indices))])
     res = []
     res.append(peak_values)
     for i in range(len(params_list)):
@@ -371,16 +507,17 @@ def find_peak_params(hspace, params_list,  window_size=1, threshold=0.5):
 ##################### TASK 3 ######################
 
 # 1/2/3 IMPLEMENT
-from skimage.draw import circle_perimeter
-def hough_vote_circles(img, radius = None):
+
+
+def hough_vote_circles(img, radius=None):
     '''
     Use the edge image to vote for 3 parameters: circle radius and circle center coordinates.
     We also accept a range of radii to save computation costs. If the radius range is not given, it is default to
     [3, diagonal of the circle]. This parameter is very useful for your experimentation later on (e.g. if there are only large circles then you don't have to keep R_min very small).
-    
+
     Hint: You can use the function circle_perimeter to make a circular mask. Center the mask over the accumulator array and increment the array. In this case, you will have to pad the accumulator array first, and clip it afterwards. 
     Remember that the return accumulator array should have matching dimension with the lengths of the parameter ranges. 
-    
+
     The dimensions of the accumulator array should be in this order: radius, x-coordinate, y-coordinate.
 
     :param img: edge image
@@ -390,35 +527,36 @@ def hough_vote_circles(img, radius = None):
     :return X: x-coordinate values array
     :return Y: y-coordinate values array
     '''
-    
+
     # Check the radius range
-    h, w = img.shape[:2]    
+    h, w = img.shape[:2]
     if radius == None:
-        R_max = np.hypot(h,w)
+        R_max = np.hypot(h, w)
         R_min = 3
     else:
-        [R_min,R_max] = radius
-    
+        [R_min, R_max] = radius
+
     # YOUR CODE HERE
 
-
     # END
-   
+
     return A, R, X, Y
 
 ##################### TASK 4 ######################
 
 # IMPLEMENT
-def hough_vote_circles_grad(img, d_angle, radius = None):
+
+
+def hough_vote_circles_grad(img, d_angle, radius=None):
     '''
     Use the edge image to vote for 3 parameters: circle radius and circle center coordinates.
     We also accept a range of radii to save computation costs. If the radius range is not given, it is default to
     [3, diagonal of the circle].
     This time, gradient information is used to avoid casting too many unnecessary votes.
-    
+
     Remember that for a given pixel, you need to cast two votes along the orientation line. One in the positive direction, the other in
     negative direction.
-    
+
     :param img: edge image
     :param d_angle: corresponding gradient orientation matrix
     :param radius: min radius, max radius
@@ -428,21 +566,24 @@ def hough_vote_circles_grad(img, d_angle, radius = None):
     :return Y: y-coordinate values array
     '''
     # Check the radius range
-    h, w = img.shape[:2]    
+    h, w = img.shape[:2]
     if radius == None:
-        R_max = np.hypot(h,w)
+        R_max = np.hypot(h, w)
         R_min = 3
     else:
-        [R_min,R_max] = radius
-    
+        [R_min, R_max] = radius
+
     # YOUR CODE HERE
 
     # END
     return A, R, X, Y
 
+
 ###############################################
 """Helper functions: You should not have to touch the following functions.
 """
+
+
 def read_img(filename):
     '''
     Read HxWxC image from the given filename
@@ -451,6 +592,7 @@ def read_img(filename):
     img = cv2.imread(filename)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
+
 
 def draw_lines(hspace, dists, thetas, hs_maxima, file_path):
     im_c = read_img(file_path)
@@ -467,7 +609,8 @@ def draw_lines(hspace, dists, thetas, hs_maxima, file_path):
               np.rad2deg(thetas[-1] + angle_step),
               dists[-1] + d_step, dists[0] - d_step]
 
-    ax[1].imshow(np.log(1 + hspace), extent=bounds, cmap=cm.gray, aspect=1 / 1.5)
+    ax[1].imshow(np.log(1 + hspace), extent=bounds,
+                 cmap=cm.gray, aspect=1 / 1.5)
     ax[1].set_title('Hough transform')
     ax[1].set_xlabel('Angles (degrees)')
     ax[1].set_ylabel('Distance (pixels)')
@@ -486,13 +629,14 @@ def draw_lines(hspace, dists, thetas, hs_maxima, file_path):
     plt.tight_layout()
     plt.show()
 
+
 def draw_circles(local_maxima, file_path, title):
     img = cv2.imread(file_path)
-    fig = plt.figure(figsize=(7,7))
+    fig = plt.figure(figsize=(7, 7))
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     circle = []
-    for _,r,x,y in zip(*local_maxima):
-        circle.append(plt.Circle((y,x),r,color=(1,0,0),fill=False))
+    for _, r, x, y in zip(*local_maxima):
+        circle.append(plt.Circle((y, x), r, color=(1, 0, 0), fill=False))
         fig.add_subplot(111).add_artist(circle[-1])
-    plt.title(title)    
+    plt.title(title)
     plt.show()
