@@ -190,7 +190,8 @@ def estimate_gradients(original_img, display=True):
     dx = cs4243_filter(normalized, Kx)
     dy = cs4243_filter(normalized, Ky)
 
-    d_mag = np.sqrt((dx**2) + (dy**2)) * 255.0
+    d_mag = np.sqrt((dx**2) + (dy**2))
+    d_mag = (d_mag/np.linalg.norm(d_mag))*255
     d_angle = np.arctan2(dy,dx)
 
     # END
