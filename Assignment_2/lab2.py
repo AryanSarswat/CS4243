@@ -256,22 +256,22 @@ def non_maximum_suppression(d_mag, d_angle, display=True):
     # YOUR CODE HERE
     x_range, y_range = out.shape
     for x in range(1, x_range - 1):
-        for y in range(1, y_range -1):
+        for y in range(1, y_range - 1):
             angle = d_angle_180[x][y]
             check = d_mag[x][y]
             if -22.5 <= angle < 22.5 or 157.5 <= angle <= 180 or -180 <= angle < -157.5:
-                check1 = d_mag[x][y + 1]
-                check2 = d_mag[x][y - 1]
+                check1 = d_mag[x + 1][y]
+                check2 = d_mag[x - 1][y]
                 if check > check1 and check > check2:
                     out[x][y] = check
             elif -67.5 <= angle < -22.5 or 112.5 <= angle < 157.5:
-                check1 = d_mag[x - 1][y + 1]
-                check2 = d_mag[x + 1][y - 1]
+                check1 = d_mag[x + 1][y - 1]
+                check2 = d_mag[x - 1][y + 1]
                 if check > check1 and check > check2:
                     out[x][y] = check
             elif -112.5 <= angle < -67.5 or 67.5 <= angle < 112.5:
-                check1 = d_mag[x + 1][y]
-                check2 = d_mag[x - 1][y]
+                check1 = d_mag[x][y + 1]
+                check2 = d_mag[x][y - 1]
                 if check > check1 and check > check2:
                     out[x][y] = check
             else: # -157.5 <= angle < -112.5 or 22.5 <= angle < 67.5
@@ -307,43 +307,34 @@ def non_maximum_suppression_interpol(d_mag, d_angle, display=True):
     for x in range(1, x_range - 1):
         for y in range(1, y_range - 1):
             angle = d_angle_180[x][y]
-            if 0 <= abs(angle) <= 45:
-                if angle >= 0:
-                    factor = np.tan((angle/180)*np.pi)
-                    check = d_mag[x][y]
-                    check1 = factor * (d_mag[x + 1][y + 1] - d_mag[x][y + 1]) + d_mag[x][y + 1]
-                    check2 = factor * (d_mag[x - 1][y - 1] - d_mag[x][y - 1]) + d_mag[x][y - 1]
-                    if check > check1 and check > check2:
-                        out[x][y] = check
-                else:
-                    factor = -np.tan((angle/180)*np.pi)
-                    check = d_mag[x][y]
-                    check1 = factor * (d_mag[x - 1][y + 1] - d_mag[x][y + 1]) + d_mag[x][y + 1]
-                    check2 = factor * (d_mag[x + 1][y - 1] - d_mag[x][y - 1]) + d_mag[x][y - 1]
-                    if check > check1 and check > check2:
-                        out[x][y] = check
-            elif 45 < abs(angle) < 90: 
-                if angle > 0:
-                    angle = 90 - angle
-                    factor = np.tan((angle/180)*np.pi)
-                    check = d_mag[x][y]
-                    check1 = factor * (d_mag[x + 1][y + 1] - d_mag[x + 1][y]) + d_mag[x + 1][y]
-                    check2 = factor * (d_mag[x - 1][y - 1] - d_mag[x - 1][y]) + d_mag[x - 1][y]
-                    if check > check1 and check > check2:
-                        out[x][y] = check
-                else:
-                    factor = -np.tan((angle/180)*np.pi)
-                    check = d_mag[x][y]
-                    check1 = factor * (d_mag[x + 1][y - 1] - d_mag[x + 1][y]) + d_mag[x + 1][y]
-                    check2 = factor * (d_mag[x - 1][y + 1] - d_mag[x - 1][y]) + d_mag[x - 1][y]
-                    if check > check1 and check > check2:
-                        out[x][y] = check
-            else:
-                check = d_mag[x][y]
-                check1 = d_mag[x + 1][y]
-                check2 = d_mag[x - 1][y]
+            check = d_mag[x][y]
+            if 0 <= angle <= 45 or -180 <= angle < -135:
+                factor = np.tan((angle/180) * np.pi) if angle > 0 else - np.tan((angle/180) * np.pi)
+                check1 = factor * (d_mag[x + 1][y + 1] - d_mag[x + 1][y]) + d_mag[x + 1][y]
+                check2 = factor * (d_mag[x - 1][y - 1] - d_mag[x - 1][y]) + d_mag[x - 1][y]
                 if check > check1 and check > check2:
-                        out[x][y] = check               
+                    out[x][y] = check
+            elif 45 < angle <= 90 or -135 <= angle < -90:
+                angle = 90 - angle if angle > 0 else 90 + angle
+                factor = np.tan((angle/180) * np.pi) if angle > 0 else - np.tan((angle/180) * np.pi)
+                check1 = factor * (d_mag[x + 1][y + 1] - d_mag[x][y + 1]) + d_mag[x][y + 1]
+                check2 = factor * (d_mag[x - 1][y - 1] - d_mag[x][y - 1]) + d_mag[x][y - 1]
+                if check > check1 and check > check2:
+                    out[x][y] = check
+            elif 90 < angle <= 135 or -90 <= angle < -45:
+                angle = angle - 90 if angle > 0 else 90 + angle
+                factor = np.tan((angle/180) * np.pi) if angle > 0 else - np.tan((angle/180) * np.pi)
+                check1 = factor * (d_mag[x + 1][y - 1] - d_mag[x][y + 1]) + d_mag[x][y + 1]
+                check2 = factor * (d_mag[x - 1][y + 1] - d_mag[x][y - 1]) + d_mag[x][y - 1]
+                if check > check1 and check > check2:
+                    out[x][y] = check
+            elif 135 < angle <= 180 or -45 <= angle < 0:
+                angle = 180 - angle if angle > 0 else angle
+                factor = np.tan((angle/180) * np.pi) if angle > 0 else - np.tan((angle/180) * np.pi)
+                check1 = factor * (d_mag[x - 1][y + 1] - d_mag[x - 1][y]) + d_mag[x - 1][y]
+                check2 = factor * (d_mag[x + 1][y - 1] - d_mag[x + 1][y]) + d_mag[x + 1][y]
+                if check > check1 and check > check2:
+                    out[x][y] = check
     # END
     if display:
         _ = plt.figure(figsize=(10, 10))
