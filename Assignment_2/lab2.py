@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from matplotlib import patches
 
 
 ##################### TASK 1 ###################
@@ -469,21 +470,22 @@ def hough_vote_lines(img):
     dist_bin_num = math.ceil((dist_max - dist_min) / dist_interval)
     theta_bin_num = math.ceil((theta_max - theta_min) / theta_interval)
     A = np.zeros((dist_bin_num, theta_bin_num), int)
-    # Use arange instead of linspace as non-integer number of bins result in wrong interval when adjusted
+    # Use arange instead of linspace as dividing bins evenly may result in wrong interval if desired interval not a factor of range size
     distances = np.arange(dist_min, dist_max, dist_interval)
     thetas = np.arange(theta_min, theta_max, theta_interval)
     
     # Voting
     for x in range(img_height):
         for y in range(img_width):
+            if img[x][y] <= 0:
+                continue
             for i in range(len(thetas)):
                 t = thetas[i]
-                if img[x][y] > 0:
-                    dist = x * np.cos(t) + y * np.sin(t)
-                    # Find 1st True value as 1st occurence of max
-                    j = np.argmax(distances > dist) - 1
-                    A[j, i] += 1
-                    # print(x, y, t, dist, distances[j])
+                dist = x * np.cos(t) + y * np.sin(t)
+                # Find 1st True value as 1st occurrence of max, bin is <= input
+                j = np.argmax(distances > dist) - 1
+                A[j, i] += 1
+                # print(x, y, t, dist, distances[j])
     
     # END
 
@@ -558,6 +560,44 @@ def hough_vote_circles(img, radius=None):
         [R_min, R_max] = radius
 
     # YOUR CODE HERE
+    R_interval = 1
+    a_interval = 1
+    b_interval = 1
+    img_height, img_width = img.shape
+    a_max = img_height
+    b_max = img_width
+
+    # Quantization
+    R_bin_num = math.ceil((R_max - R_min) / R_interval)
+    a_bin_num = math.ceil(a_max / a_interval)
+    b_bin_num = math.ceil(b_max / b_interval)
+    A = np.zeros((R_bin_num, a_bin_num, b_bin_num), int)
+    # Use arange instead of linspace as dividing bins evenly may result in wrong interval if desired interval not a factor of range size
+    R = np.arange(R_min, R_max, R_interval)
+    X = np.arange(0, a_max, a_interval)
+    Y = np.arange(0, b_max, b_interval)
+    
+    # Voting
+    for x in range(img_height):
+        for y in range(img_width):
+            if img[x][y] <= 0:
+                continue
+
+            for i in range(len(R)):
+                r = R[i]
+                perim_x, perim_y = circle_perimeter(x, y, r, shape=(img.shape)) # From imported skimage.draw module
+                if R_interval == 1 and a_interval == 1 and b_interval == 1:
+                    A[i, perim_x, perim_y] += 1
+
+                # Finding bins if intervals != 1 inefficient due to loop over features
+                else:
+                    for n in range(len(perim_x)):
+                        # Find 1st True value as 1st occurrence of max, bin is <= input
+                        j = np.argmax(X > perim_x[n]) - 1
+                        k = np.argmax(Y > perim_y[n]) - 1
+                        if j < 0 or k < 0:
+                            continue
+                        A[i, j, k] += 1
 
     # END
 
@@ -653,11 +693,21 @@ def draw_lines(hspace, dists, thetas, hs_maxima, file_path):
 
 def draw_circles(local_maxima, file_path, title):
     img = cv2.imread(file_path)
-    fig = plt.figure(figsize=(7, 7))
-    plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-    circle = []
-    for _, r, x, y in zip(*local_maxima):
-        circle.append(plt.Circle((y, x), r, color=(1, 0, 0), fill=False))
-        fig.add_subplot(111).add_artist(circle[-1])
+    fig, axes = plt.subplots(1, figsize=(7,7))
+    axes.set_aspect('equal')
+    
+    axes.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    for _,r,x,y in zip(*local_maxima):
+        axes.add_patch(patches.Circle((y,x),r,color=(1,0,0),fill=False)) # Circles from matplotlib.patches
     plt.title(title)
     plt.show()
+
+    #img = cv2.imread(file_path)
+    #fig = plt.figure(figsize=(7, 7))
+    #plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    #circle = []
+    #for _, r, x, y in zip(*local_maxima):
+    #    circle.append(plt.Circle((y, x), r, color=(1, 0, 0), fill=False))
+    #    fig.add_subplot(111).add_artist(circle[-1])
+    #plt.title(title)
+    #plt.show()
