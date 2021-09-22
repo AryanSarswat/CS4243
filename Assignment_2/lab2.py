@@ -571,11 +571,14 @@ def hough_vote_circles(img, radius=None):
     R_bin_num = math.ceil((R_max - R_min) / R_interval)
     a_bin_num = math.ceil(a_max / a_interval)
     b_bin_num = math.ceil(b_max / b_interval)
-    A = np.zeros((R_bin_num, a_bin_num, b_bin_num), int)
+    A = np.zeros((R_bin_num, a_bin_num, b_bin_num))
     # Use arange instead of linspace as dividing bins evenly may result in wrong interval if desired interval not a factor of range size
     R = np.arange(R_min, R_max, R_interval)
     X = np.arange(0, a_max, a_interval)
     Y = np.arange(0, b_max, b_interval)
+
+    # Weights for circles of different radii, weight decreases as radii increases
+    R_weighted_incr = np.linspace(1, 1 + ((R_max - R_min) / R_min), R_bin_num)[::-1]
     
     # Voting
     for x in range(img_height):
@@ -587,7 +590,7 @@ def hough_vote_circles(img, radius=None):
                 r = R[i]
                 perim_x, perim_y = circle_perimeter(x, y, r, shape=(img.shape)) # From imported skimage.draw module
                 if R_interval == 1 and a_interval == 1 and b_interval == 1:
-                    A[i, perim_x, perim_y] += 1
+                    A[i, perim_x, perim_y] += R_weighted_incr[i]
 
                 # Finding bins if intervals != 1 inefficient due to loop over features
                 else:
