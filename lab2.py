@@ -175,15 +175,15 @@ def estimate_gradients(original_img, display=True):
     This is because x direction is the downward line.
     '''
     Kx = np.array(
-        [[-1,  -2, -1],
+        [[1,  2,  1],
          [0,  0,  0],
-         [1, 2, 1]]
+         [-1, -2, -1]]
     )
 
     Ky = np.array(
-        [[-1,  0, 1],
-         [-2,  0, 2],
-         [-1,  0, 1]]
+        [[1,  0, -1],
+         [2,  0, -2],
+         [1,  0, -1]]
     )
 
     normalized = original_img / 255.0
@@ -522,6 +522,7 @@ def find_peak_params(hspace, params_list,  window_size=1, threshold=0.5):
     res.append(peak_values)
     for i in range(len(params_list)):
         res.append(params_list[i][peaks_indices.T[i]])
+
     return res
 
 
