@@ -671,30 +671,14 @@ def hough_vote_circles_grad(img, d_angle, radius=None):
                 b1 = round(y + r * np.sin(theta))
                 a2 = round(x - r * np.cos(theta))
                 b2 = round(x - r * np.sin(theta))
-                #a_votes = np.array([-1])
-                #b_votes = np.array([-1])
-
-                # Handling edge cases
-                #if (a1 >= 0 and a1 <= img_height) and (b1 >= 0 and b1 <= img_height):
-                #    a_votes[0] = int(a1)
-                #    b_votes[0] = int(b1)
-                #if (a2 >= 0 and a2 <= img_height) and (b2 >= 0 and b2 <= img_height):
-                #    a_votes = np.append(a_votes, [int(a2)])
-                #    b_votes = np.append(b_votes, [int(b2)])
-                #if a_votes[0] < 0 or b_votes[0] < 0:
-                #    continue
                 
                 if R_interval == 1 and a_interval == 1 and b_interval == 1:
-                    #A[i, a_votes, b_votes] += R_weighted_incr[i]
-                    # print(i, a1, b1, a2, b2)
                     if (a1 >= 0 and a1 < img_height) and (b1 >= 0 and b1 < img_height):
                         A[i, a1, b1] += R_weighted_incr[i]
-                        # print("Yes 1")
                     if (a2 >= 0 and a2 < img_height) and (b2 >= 0 and b2 < img_height):
                         A[i, a2, b2] += R_weighted_incr[i]
-                        # print("Yes 2")
 
-                # Finding bins if intervals != 1 inefficient due to loop over features
+                # Place into bins for intervals > 1
                 else:
                     # Find 1st True value as 1st occurrence of max, bin is <= input
                     j1 = np.argmax(X > a1) - 1
@@ -703,7 +687,6 @@ def hough_vote_circles_grad(img, d_angle, radius=None):
                     k2 = np.argmax(Y > b2) - 1
                     if (j1 >= 0 and j1 < img_height) and (k1 >= 0 and k1 < img_height):
                         A[i, j1, k1] += R_weighted_incr[i]
-                        # print("Yes 1")
                     if (j2 >= 0 and j2 < img_height) and (k2 >= 0 and k2 < img_height):
                         A[i, j2, k2] += R_weighted_incr[i]
 
