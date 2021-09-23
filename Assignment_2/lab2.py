@@ -600,7 +600,7 @@ def hough_vote_circles(img, radius=None):
                         k = np.argmax(Y > perim_y[n]) - 1
                         if j < 0 or k < 0:
                             continue
-                        A[i, j, k] += 1
+                        A[i, j, k] += R_weighted_incr[i]
 
     # END
 
@@ -638,6 +638,74 @@ def hough_vote_circles_grad(img, d_angle, radius=None):
         [R_min, R_max] = radius
 
     # YOUR CODE HERE
+    R_interval = 5
+    a_interval = 5
+    b_interval = 5
+    img_height, img_width = img.shape
+    a_max = img_height
+    b_max = img_width
+
+    # Quantization
+    R_bin_num = math.ceil((R_max - R_min) / R_interval)
+    a_bin_num = math.ceil(a_max / a_interval)
+    b_bin_num = math.ceil(b_max / b_interval)
+    A = np.zeros((R_bin_num, a_bin_num, b_bin_num))
+    # Use arange instead of linspace as dividing bins evenly may result in wrong interval if desired interval not a factor of range size
+    R = np.arange(R_min, R_max, R_interval)
+    X = np.arange(0, a_max, a_interval)
+    Y = np.arange(0, b_max, b_interval)
+
+    # Weights for circles of different radii, weight decreases as radii increases
+    R_weighted_incr = np.ones((R_bin_num))
+    
+    # Voting
+    for x in range(img_height):
+        for y in range(img_width):
+            if img[x][y] <= 0:
+                continue
+
+            for i in range(len(R)):
+                r = R[i]
+                theta = d_angle[x, y]
+                a1 = round(x + r * np.cos(theta))
+                b1 = round(y + r * np.sin(theta))
+                a2 = round(x - r * np.cos(theta))
+                b2 = round(x - r * np.sin(theta))
+                #a_votes = np.array([-1])
+                #b_votes = np.array([-1])
+
+                # Handling edge cases
+                #if (a1 >= 0 and a1 <= img_height) and (b1 >= 0 and b1 <= img_height):
+                #    a_votes[0] = int(a1)
+                #    b_votes[0] = int(b1)
+                #if (a2 >= 0 and a2 <= img_height) and (b2 >= 0 and b2 <= img_height):
+                #    a_votes = np.append(a_votes, [int(a2)])
+                #    b_votes = np.append(b_votes, [int(b2)])
+                #if a_votes[0] < 0 or b_votes[0] < 0:
+                #    continue
+                
+                if R_interval == 1 and a_interval == 1 and b_interval == 1:
+                    #A[i, a_votes, b_votes] += R_weighted_incr[i]
+                    # print(i, a1, b1, a2, b2)
+                    if (a1 >= 0 and a1 < img_height) and (b1 >= 0 and b1 < img_height):
+                        A[i, a1, b1] += R_weighted_incr[i]
+                        # print("Yes 1")
+                    if (a2 >= 0 and a2 < img_height) and (b2 >= 0 and b2 < img_height):
+                        A[i, a2, b2] += R_weighted_incr[i]
+                        # print("Yes 2")
+
+                # Finding bins if intervals != 1 inefficient due to loop over features
+                else:
+                    # Find 1st True value as 1st occurrence of max, bin is <= input
+                    j1 = np.argmax(X > a1) - 1
+                    k1 = np.argmax(Y > b1) - 1
+                    j2 = np.argmax(X > a2) - 1
+                    k2 = np.argmax(Y > b2) - 1
+                    if (j1 >= 0 and j1 < img_height) and (k1 >= 0 and k1 < img_height):
+                        A[i, j1, k1] += R_weighted_incr[i]
+                        # print("Yes 1")
+                    if (j2 >= 0 and j2 < img_height) and (k2 >= 0 and k2 < img_height):
+                        A[i, j2, k2] += R_weighted_incr[i]
 
     # END
     return A, R, X, Y
