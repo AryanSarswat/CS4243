@@ -6,6 +6,7 @@ from scipy.ndimage.filters import convolve
 from scipy.ndimage import gaussian_filter
 import math
 
+
 ### REMOVE THIS
 from cv2 import findHomography
 
@@ -57,7 +58,24 @@ def harris_corners(img, window_size=3, k=0.04):
     response = np.zeros((H, W))
 
     # YOUR CODE HERE
+    Ix = filters.sobel_v(img)
+    Iy = filters.sobel_h(img)
+    
+    Ix2 = Ix * Ix
+    Iy2 = Iy * Iy
+    IxIy = Ix * Iy
+    
+    SummedIx2 = convolve(Ix2, np.ones((window_size,window_size)))
+    SummedIy2 = convolve(Iy2, np.ones((window_size,window_size)))
+    SummedIxIy = convolve(IxIy, np.ones((window_size,window_size)))
 
+    shape = SummedIx2.shape
+    response = np.zeros(shape)
+
+    for row in range(shape[0]):
+        for col in range(shape[1]):
+            H = np.array([[SummedIx2[row][col],SummedIxIy[row][col]],[SummedIxIy[row][col],SummedIy2[row][col]]])
+            response[row][col] = np.linalg.det(H) - k * (np.trace(H) ** 2)
     # END        
     return response
 
@@ -79,7 +97,11 @@ def naive_descriptor(patch):
     '''
     feature = []
     ### YOUR CODE HERE
-
+    mu = np.mean(patch)
+    sigma = np.std(patch)
+    norm = patch - mu / (sigma + 0.0001)
+    norm = np.where(norm > 0, norm, 0)
+    feature = np.ndarray.flatten(norm)
     ### END YOUR CODE
 
     return feature
@@ -155,7 +177,49 @@ def simple_sift(patch):
     histogram = np.zeros((4,4,8))
     
     # YOUR CODE HERE
-  
+    gauss_patch = convolve(patch, weights)
+    Ix = filters.sobel_v(gauss_patch)
+    Iy = filters.sobel_h(gauss_patch)
+    grad_mag = np.sqrt((Ix**2) + (Iy**2))
+    grad_mag = (grad_mag/np.linalg.norm(grad_mag))
+    grad_angle = np.arctan2(Iy,Ix) * 180/np.pi
+
+    shape = patch.shape
+    hists = []
+
+    for i in range(shape[0]//4):
+        for j in range(shape[1]//4):
+            grad_window = grad_angle[i * 4: (i * 4) + 4, j * 4 : (j * 4) + 4]
+            weight_window = grad_mag[i * 4: (i * 4) + 4, j * 4 : (j * 4) + 4]
+
+            temp_hist = np.zeros(8)
+
+            for row in range(4):
+                for col in range(4):
+                    angle = grad_window[row][col]
+                    weight = weight_window[row][col]
+
+                    if 0 <= angle < 45:
+                        temp_hist[0] += weight
+                    elif 45 <= angle < 90:
+                        temp_hist[1] += weight
+                    elif 90 <= angle < 135:
+                        temp_hist[2] += weight
+                    elif 135 <= angle <= 180:
+                        temp_hist[3] += weight
+                    elif -45 <= angle < 0:
+                        temp_hist[7] += weight
+                    elif -90 <= angle < -45:
+                        temp_hist[6] += weight
+                    elif -135 <= angle < -90:
+                        temp_hist[5] += weight
+                    elif -180 <= angle < -135:
+                        temp_hist[4] += weight
+                        
+            hists.append(temp_hist)
+    hists = np.array(hists)
+    feature = hists.flatten()
+    feature = feature / np.linalg.norm(feature)
     # END
     return feature
 
@@ -172,9 +236,15 @@ def top_k_matches(desc1, desc2, k=2):
          ...<truncated>
     '''
     match_pairs = []
-    
     # YOUR CODE HERE
-  
+    diff = cdist(desc1, desc2)
+    for i in range(len(diff)):
+        dist = diff[i]
+        sort_dist = sorted(dist)[:k]
+        temp_tup = (i , [])
+        for j in sort_dist:
+            temp_tup[1].append((np.where(dist == j)[0], j))
+        match_pairs.append(temp_tup)
     # END
     return match_pairs
 
@@ -202,7 +272,9 @@ def ratio_test_match(desc1, desc2, match_threshold):
     match_pairs = []
     top_2_matches = top_k_matches(desc1, desc2)
     # YOUR CODE HERE
-   
+    for i in top_2_matches:
+        if (i[1][0][1] / i[1][1][1])  < match_threshold:
+            match_pairs.append([i[0],i[1][0][0]])
     # END
     # Modify this line as you wish
     match_pairs = np.array(match_pairs)
