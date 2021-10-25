@@ -181,7 +181,6 @@ def simple_sift(patch):
     Ix = filters.sobel_v(gauss_patch)
     Iy = filters.sobel_h(gauss_patch)
     grad_mag = np.sqrt((Ix**2) + (Iy**2))
-    grad_mag = (grad_mag/np.linalg.norm(grad_mag))
     grad_angle = np.arctan2(Iy,Ix) * 180/np.pi
 
     shape = patch.shape
