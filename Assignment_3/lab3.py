@@ -565,7 +565,25 @@ def shift_sift_descriptor(desc):
        [ 50.,   4.,   0.,   0.,   0.,   0.,   0.,   0.]]
     '''
     # YOUR CODE HERE
-   
+    desc = desc.reshape((16, 8))
+    num_hist = desc.shape[0]
+    num_bins = desc.shape[1]
+    hist_arr = np.zeros(desc.shape)
+    for i in range(num_hist):
+        hist_bins = np.zeros(num_bins)
+        hist_bins[0] = desc[i, 0]
+        hist_bins[1:] = np.flip(desc[i, 1:])
+        hist_arr[i] = hist_bins
+    
+    res = np.zeros((desc.shape))
+    j = 0
+    while j < num_hist:
+        res[-j-4] = hist_arr[j]
+        res[-j-3] = hist_arr[j+1]
+        res[-j-2] = hist_arr[j+2]
+        res[-j-1] = hist_arr[j+3]
+        j += 4
+    res = res.reshape(128)
     # END
     return res
 
@@ -577,7 +595,12 @@ def create_mirror_descriptors(img):
     Make sure the virtual descriptors correspond to the original set of descriptors.
     '''
     # YOUR CODE HERE
- 
+    kps, descs, sizes, angles = compute_cv2_descriptor(img)
+    mir_descs = np.zeros((descs.shape))
+    num_descs = descs.shape[0]
+    for i in range(num_descs):
+        mir_descs[i] = shift_sift_descriptor(descs[i])
+
     # END
     return kps, descs, sizes, angles, mir_descs
 
@@ -592,7 +615,8 @@ def match_mirror_descriptors(descs, mirror_descs, threshold = 0.7):
 
     match_result = []
     # YOUR CODE HERE
-   
+    
+
     # END
     return match_result
 
