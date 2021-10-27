@@ -177,11 +177,11 @@ def simple_sift(patch):
     histogram = np.zeros((4,4,8))
     
     # YOUR CODE HERE
-    gauss_patch = convolve(patch, weights)
-    Ix = filters.sobel_v(gauss_patch)
-    Iy = filters.sobel_h(gauss_patch)
+    Ix = filters.sobel_v(patch)
+    Iy = filters.sobel_h(patch)
     grad_mag = np.sqrt((Ix**2) + (Iy**2))
     grad_angle = np.arctan2(Iy,Ix) * 180/np.pi
+    grad_mag = grad_mag * weights
 
     shape = patch.shape
     hists = []
