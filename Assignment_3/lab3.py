@@ -273,7 +273,7 @@ def ratio_test_match(desc1, desc2, match_threshold):
     # YOUR CODE HERE
     for i in top_2_matches:
         if (i[1][0][1] / i[1][1][1])  < match_threshold:
-            match_pairs.append([i[0],i[1][0][0]])
+            match_pairs.append([i[0], int(i[1][0][0])])  # Without cast 2nd element is array object
     # END
     # Modify this line as you wish
     match_pairs = np.array(match_pairs)
@@ -344,6 +344,45 @@ def compute_homography(src, dst):
     h_matrix = np.eye(3, dtype=np.float64)
   
     # YOUR CODE HERE
+    num_points = src.shape[0]
+    src_x = src[:, 0]
+    src_y = src[:, 1]
+    dst_x = dst[:, 0]
+    dst_y = dst[:, 1]
+
+    # Normalization matrix: Translate by mean vector & scale by SD/sqrt(2)
+    src_mx = np.mean(src_x)
+    src_my = np.mean(src_y)
+    src_sx = np.std(src_x) / np.sqrt(2)
+    src_sy = np.std(src_y) / np.sqrt(2)
+    T_src = np.array([[1/src_sx, 0, -src_mx/src_sx], [0, 1/src_sy, -src_my/src_sy], [0, 0, 1]])
+
+    dst_mx = np.mean(dst_x)
+    dst_my = np.mean(dst_y)
+    dst_sx = np.std(dst_x) / np.sqrt(2)
+    dst_sy = np.std(dst_y) / np.sqrt(2)
+    T_dst = np.array([[1/dst_sx, 0, -dst_mx/dst_sx], [0, 1/dst_sy, -dst_my/dst_sy], [0, 0, 1]])
+
+    # Normalize src and dst
+    src_norm = transform_homography(src, T_src)
+    dst_norm = transform_homography(dst, T_dst)
+
+    # DLT
+    A = []
+    for i in range(num_points):
+        x = src_norm[i, 0]
+        y = src_norm[i, 1]
+        x_p = dst_norm[i, 0]
+        y_p = dst_norm[i, 1]
+        A.append([-x, -y, -1, 0, 0, 0, x*x_p, y*x_p, x_p])
+        A.append([0, 0, 0, -x, -y, -1, x*y_p, y*y_p, y_p])
+
+    A = np.array(A)
+    u, s, vh = np.linalg.svd(A)
+    H = vh[:, -1].reshape((3,3))
+
+    # Denormalization: Revert initial transformations
+    h_matrix = np.matmul(np.linalg.inv(T_dst), np.matmul(H, T_src))
 
     # END 
 
