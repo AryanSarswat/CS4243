@@ -423,7 +423,39 @@ def ransac_homography(keypoints1, keypoints2, matches, sampling_ratio=0.5, n_ite
 
     # RANSAC iteration start
     ### YOUR CODE HERE
- 
+    H = np.eye(3, dtype=np.float64)
+    for i in range(n_iters):
+        curr_inliers = []
+        num_inliers = 0
+
+        # Get random samples
+        indices = np.random.randint(N, size=n_samples)
+        samples = matches[indices]
+        src = keypoints1[samples[:, 0]]
+        dst = keypoints2[samples[:, 0]]
+        H_temp = compute_homography(src, dst)
+
+        # Produce H, find inliers and update inlier stores if new max inliers found
+        for i in indices:
+            P = np.array([keypoints1[matches[i][0]][0], keypoints1[matches[i][0]][1], 1])
+            P_match = keypoints2[matches[i][1]]
+            P_res = np.matmul(H_temp, P)
+            P_proj = np.array([P_res[0], P_res[1]])
+            if np.linalg.norm(P_match - P_proj) <= delta:
+                num_inliers += 1
+                curr_inliers.append(i)
+
+            if num_inliers > n_inliers:
+                n_inliers = num_inliers
+                H = H_temp
+                max_inliers = np.array(curr_inliers)
+    
+    # Re-compute H with inliers
+    inliers_val = matches[max_inliers]
+    re_src = keypoints1[inliers_val[:, 0]]
+    re_dst = keypoints1[inliers_val[:, 1]]
+    H = compute_homography(re_src, re_dst)
+    
     ### END YOUR CODE
     return H, matches[max_inliers]
 
