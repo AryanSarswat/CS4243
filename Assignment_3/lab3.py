@@ -686,7 +686,7 @@ def match_with_self(descs, kps, threshold=0.8):
     top_3_matches = top_k_matches(descs, descs, k = 3)
     for i in top_3_matches: 
         if (i[1][1][1] / i[1][2][1])  < threshold:
-            matches.append([i[0],i[1][1][0]])
+            matches.append([i[0],i[1][1][0][0]])
     # END
     # Modify this line as you wish
     matches = np.array(matches)
@@ -713,19 +713,24 @@ def find_rotation_centers(matches, kps, angles, sizes, im_shape):
     for i in matches:
         kp1 = kps[i[0]]
         kp2 = kps[i[1]]
+        
         angle1 = angles[i[0]]
         angle2 = angles[i[1]]
+
         if abs(angle1 - angle2) <= 1:
             continue
         else:
+            angle1 = angle1*np.pi/180
+            angle2 = angle2*np.pi/180
             d = distance(kp1, kp2)
             gamma = angle_with_x_axis(kp1, kp2)
             beta = (angle1 - angle2 + np.pi)/2
-            r = d * np.sqrt(1 + np.tan(beta)**2) / 2
-            x_c = kp1[0] + r * np.cos(beta + gamma)
-            y_c = kp1[1] + r * np.sin(beta + gamma)
-            if x_c > im_shape[0] or x_c < 0 or y_c > im_shape[1] or y_c < 0:
-                pass
+            r = d * np.sqrt(1 + (np.tan(beta))**2) / 2
+            x_c = kp1[1] + r * np.cos(beta + gamma)
+            y_c = kp1[0] + r * np.sin(beta + gamma)
+            
+            if x_c > im_shape[1] or x_c < 0 or y_c > im_shape[0] or y_c < 0:
+                continue
             else:
                 Y.append(y_c)
                 X.append(x_c)
@@ -740,13 +745,31 @@ def hough_vote_rotation(matches, kps, angles, sizes, im_shape, window=1, thresho
     Hough Voting:
         X: bound by width of image
         Y: bound by height of image
-    Return the y-coordianate and x-coordinate values for the centers (limit by the num_centers)
+    Return the y-coordinate and x-coordinate values for the centers (limit by the num_centers)
     '''
     
     Y,X,W = find_rotation_centers(matches, kps, angles, sizes, im_shape)
     
     # YOUR CODE HERE
+    interval = window
+    Y_bin_num = math.ceil((im_shape[0])/interval)
+    X_bin_num = math.ceil((im_shape[1])/interval)
     
+    A = np.zeros((Y_bin_num, X_bin_num))
+    
+    Y_range = np.arange(0, im_shape[0], interval)
+    X_range = np.arange(0, im_shape[1], interval)
+    
+    for ind in range(len(Y)):
+        q = -abs(W[ind][0] - W[ind][1])/(sum(W[ind]))
+        w = np.exp(2 * q)
+        
+        i = np.argmax(Y_range > Y[ind])
+        j = np.argmax(X_range > X[ind])
+        #print(f'Voting for ({i},{j}) from ({Y[ind]},{X[ind]}) with {w}')
+        A[i][j] += w
+        
+    v , y_values, x_values = find_peak_params(A,[Y_range,X_range], threshold=threshold, window_size=window)
     # END
     
-    return y_values, x_values
+    return y_values[:num_centers], x_values[:num_centers]
