@@ -649,8 +649,25 @@ def find_symmetry_lines(matches, kps):
     '''
     rhos = []
     thetas = []
+
     # YOUR CODE HERE
-    
+    num_matches = matches.shape[0]
+    ori_kps = kps[matches[:, 0]]
+    mir_kps = kps[matches[:, 1]]
+
+    for i in range(num_matches):
+        x_ori, y_ori = ori_kps[i, 0], ori_kps[i, 1]
+        x_mir, y_mir = mir_kps[i, 0], mir_kps[i, 1]
+        x_mid = (x_ori + x_mir) / 2
+        y_mid = (y_ori + y_mir) / 2
+        # print(str(x_ori) + " " + str(x_mir) + " " + str(x_mid))
+        # print(str(y_ori) + " " + str(y_mir) + " " + str(y_mid))
+        theta = angle_with_x_axis([x_ori, y_ori], [x_mir, y_mir])
+        rho = x_mid * math.cos(theta) + y_mid * math.sin(theta)
+        rhos.append(rho)
+        thetas.append(theta)
+    rhos = np.array(rhos)
+    thetas = np.array(thetas)
 
     # END
     
@@ -665,9 +682,41 @@ def hough_vote_mirror(matches, kps, im_shape, window=1, threshold=0.5, num_lines
     Feel free to vary the interval size.
     '''
     rhos, thetas = find_symmetry_lines(matches, kps)
-    
+
     # YOUR CODE HERE
-  
+    rho_interval = 1
+    theta_interval = math.pi/180
+    img_height, img_width = im_shape
+    rho_max = math.ceil(math.sqrt(img_height**2 + img_width**2))
+    rho_min = -rho_max
+    theta_max = 2 * math.pi
+    theta_min = 0
+
+    # Quantization
+    rho_bin_num = math.ceil((rho_max - rho_min) / rho_interval)
+    theta_bin_num = math.ceil((theta_max - theta_min) / theta_interval)
+    A = np.zeros((rho_bin_num, theta_bin_num), int)
+    # Use arange instead of linspace as dividing bins evenly may result in wrong interval if desired interval not a factor of range size
+    rho_axis = np.arange(rho_min, rho_max, rho_interval)
+    theta_axis = np.arange(theta_min, theta_max, theta_interval)
+
+    # Voting
+    for i in range(rhos.shape[0]):
+        # Find 1st True value as 1st occurrence of max, bin is <= input
+        rho_bin = np.argmax(rho_axis > rhos[i]) - 1
+        # print(str(rho_axis[rho_bin]) + " -> " + str(rhos[i]))
+        theta_bin = np.argmax(theta_axis > thetas[i]) - 1
+        # print(str(theta_axis[theta_bin]) + " -> " + str(thetas[i]))
+        A[rho_bin, theta_bin] += 1
+    
+    params_list = [rho_axis, theta_axis]
+    votes, peak_rhos, peak_thetas = find_peak_params(A, params_list, window, threshold)
+    rho_values = peak_rhos[:num_lines]
+    theta_values = peak_thetas[:num_lines]
+    print(votes)
+    print(peak_rhos)
+    print(peak_thetas)
+
     # END
     
     return rho_values, theta_values
