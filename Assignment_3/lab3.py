@@ -433,7 +433,7 @@ def ransac_homography(keypoints1, keypoints2, matches, sampling_ratio=0.5, n_ite
         indices = np.random.randint(N, size=n_samples)
         samples = matches[indices]
         src = keypoints1[samples[:, 0]]
-        dst = keypoints2[samples[:, 0]]
+        dst = keypoints2[samples[:, 1]]
         H_temp = compute_homography(src, dst)
 
         # Produce H, find inliers and update inlier stores if new max inliers found
@@ -451,10 +451,10 @@ def ransac_homography(keypoints1, keypoints2, matches, sampling_ratio=0.5, n_ite
                 H = H_temp
                 max_inliers = np.array(curr_inliers)
     
-    # Re-compute H with inliers
+    # Re-compute H with inlie   rs
     inliers_val = matches[max_inliers]
     re_src = keypoints1[inliers_val[:, 0]]
-    re_dst = keypoints1[inliers_val[:, 1]]
+    re_dst = keypoints2[inliers_val[:, 1]]
     H = compute_homography(re_src, re_dst)
     
     ### END YOUR CODE
