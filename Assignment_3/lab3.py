@@ -273,7 +273,6 @@ def ratio_test_match(desc1, desc2, match_threshold):
 
     # YOUR CODE HERE
     for i in top_2_matches:
-        print(i[1][0][1] / i[1][1][1])
         if (i[1][0][1] / i[1][1][1])  < match_threshold:
             match_pairs.append([i[0], int(i[1][0][0])])  # Without cast 2nd element is array object
     # END
@@ -376,12 +375,12 @@ def compute_homography(src, dst):
         y = src_norm[i, 1]
         x_p = dst_norm[i, 0]
         y_p = dst_norm[i, 1]
-        A.append([-x, -y, -1, 0, 0, 0, x*x_p, y*x_p, x_p])
+        A.append([-x, -y, -1, 0, 0, 0, x*x_p, y*x_p, x_p]) 
         A.append([0, 0, 0, -x, -y, -1, x*y_p, y*y_p, y_p])
 
     A = np.array(A)
     u, s, vh = np.linalg.svd(A)
-    H = vh[:, -1].reshape((3,3))
+    H = (vh[-1,:]/ vh[-1,-1]).reshape((3,3))
 
     # Denormalization: Revert initial transformations
     h_matrix = np.matmul(np.linalg.inv(T_dst), np.matmul(H, T_src))
@@ -434,7 +433,7 @@ def ransac_homography(keypoints1, keypoints2, matches, sampling_ratio=0.5, n_ite
         indices = np.random.randint(N, size=n_samples)
         samples = matches[indices]
         src = keypoints1[samples[:, 0]]
-        dst = keypoints2[samples[:, 0]]
+        dst = keypoints2[samples[:, 1]]
         H_temp = compute_homography(src, dst)
 
         # Produce H, find inliers and update inlier stores if new max inliers found
@@ -452,10 +451,10 @@ def ransac_homography(keypoints1, keypoints2, matches, sampling_ratio=0.5, n_ite
                 H = H_temp
                 max_inliers = np.array(curr_inliers)
     
-    # Re-compute H with inliers
+    # Re-compute H with inlie   rs
     inliers_val = matches[max_inliers]
     re_src = keypoints1[inliers_val[:, 0]]
-    re_dst = keypoints1[inliers_val[:, 1]]
+    re_dst = keypoints2[inliers_val[:, 1]]
     H = compute_homography(re_src, re_dst)
     
     ### END YOUR CODE
