@@ -663,6 +663,7 @@ def find_symmetry_lines(matches, kps):
         # print(str(y_ori) + " " + str(y_mir) + " " + str(y_mid))
         theta = angle_with_x_axis([x_ori, y_ori], [x_mir, y_mir])
         rho = x_mid * math.cos(theta) + y_mid * math.sin(theta)
+        # print(f"{rho} with {theta}")
         rhos.append(rho)
         thetas.append(theta)
     rhos = np.array(rhos)
@@ -696,25 +697,28 @@ def hough_vote_mirror(matches, kps, im_shape, window=1, threshold=0.5, num_lines
     theta_bin_num = math.ceil((theta_max - theta_min) / theta_interval)
     A = np.zeros((rho_bin_num, theta_bin_num), int)
     # Use arange instead of linspace as dividing bins evenly may result in wrong interval if desired interval not a factor of range size
-    rho_axis = np.arange(rho_min, rho_max, rho_interval)
-    theta_axis = np.arange(theta_min, theta_max, theta_interval)
+    rho_bins = np.arange(rho_min, rho_max, rho_interval)
+    theta_bins = np.arange(theta_min, theta_max, theta_interval)
 
     # Voting
     for i in range(rhos.shape[0]):
+        # print(f"{rhos[i]} with {thetas[i]}")
         # Find 1st True value as 1st occurrence of max, bin is <= input
-        rho_bin = np.argmax(rho_axis > rhos[i]) - 1
-        # print(str(rho_axis[rho_bin]) + " -> " + str(rhos[i]))
-        theta_bin = np.argmax(theta_axis > thetas[i]) - 1
-        # print(str(theta_axis[theta_bin]) + " -> " + str(thetas[i]))
-        A[rho_bin, theta_bin] += 1
+        y = np.argmax(rho_bins > rhos[i]) - 1
+        # print(str(rho_bins[y]) + " <- " + str(rhos[i]))
+        x = np.argmax(theta_bins > thetas[i]) - 1
+        # print(str(theta_bins[x]) + " <- " + str(thetas[i]))
+        A[y, x] += 1
     
-    params_list = [rho_axis, theta_axis]
+    params_list = [rho_bins, theta_bins]
     votes, peak_rhos, peak_thetas = find_peak_params(A, params_list, window, threshold)
+    # top_indexes = np.flip(np.argsort(votes))[:num_lines]
     rho_values = peak_rhos[:num_lines]
     theta_values = peak_thetas[:num_lines]
-    print(votes)
-    print(peak_rhos)
-    print(peak_thetas)
+    # print(votes)
+    # print(votes[top_indexes])
+    # print(rho_values)
+    # print(theta_values)
 
     # END
     
