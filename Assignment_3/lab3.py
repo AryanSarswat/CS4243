@@ -693,6 +693,7 @@ def find_rotation_centers(matches, kps, angles, sizes, im_shape):
     for i in matches:
         kp1 = kps[i[0]]
         kp2 = kps[i[1]]
+        
         angle1 = angles[i[0]]
         angle2 = angles[i[1]]
 
@@ -707,7 +708,8 @@ def find_rotation_centers(matches, kps, angles, sizes, im_shape):
             r = d * np.sqrt(1 + (np.tan(beta))**2) / 2
             x_c = kp1[1] + r * np.cos(beta + gamma)
             y_c = kp1[0] + r * np.sin(beta + gamma)
-            if x_c > im_shape[0] or x_c < 0 or y_c > im_shape[1] or y_c < 0:
+            
+            if x_c > im_shape[1] or x_c < 0 or y_c > im_shape[0] or y_c < 0:
                 continue
             else:
                 Y.append(y_c)
@@ -723,20 +725,20 @@ def hough_vote_rotation(matches, kps, angles, sizes, im_shape, window=1, thresho
     Hough Voting:
         X: bound by width of image
         Y: bound by height of image
-    Return the y-coordianate and x-coordinate values for the centers (limit by the num_centers)
+    Return the y-coordinate and x-coordinate values for the centers (limit by the num_centers)
     '''
     
     Y,X,W = find_rotation_centers(matches, kps, angles, sizes, im_shape)
     
     # YOUR CODE HERE
     interval = window
-    Y_bin_num = math.ceil((im_shape[1])/interval)
-    X_bin_num = math.ceil((im_shape[0])/interval)
+    Y_bin_num = math.ceil((im_shape[0])/interval)
+    X_bin_num = math.ceil((im_shape[1])/interval)
     
     A = np.zeros((Y_bin_num, X_bin_num))
     
-    Y_range = np.arange(0, im_shape[1], interval)
-    X_range = np.arange(0, im_shape[0], interval)
+    Y_range = np.arange(0, im_shape[0], interval)
+    X_range = np.arange(0, im_shape[1], interval)
     
     for ind in range(len(Y)):
         q = -abs(W[ind][0] - W[ind][1])/(sum(W[ind]))
@@ -744,10 +746,10 @@ def hough_vote_rotation(matches, kps, angles, sizes, im_shape, window=1, thresho
         
         i = np.argmax(Y_range > Y[ind])
         j = np.argmax(X_range > X[ind])
+        #print(f'Voting for ({i},{j}) from ({Y[ind]},{X[ind]}) with {w}')
         A[i][j] += w
         
     v , y_values, x_values = find_peak_params(A,[Y_range,X_range], threshold=threshold, window_size=window)
     # END
-    
     
     return y_values[:num_centers], x_values[:num_centers]
