@@ -270,8 +270,10 @@ def ratio_test_match(desc1, desc2, match_threshold):
     '''
     match_pairs = []
     top_2_matches = top_k_matches(desc1, desc2)
+
     # YOUR CODE HERE
     for i in top_2_matches:
+        print(i[1][0][1] / i[1][1][1])
         if (i[1][0][1] / i[1][1][1])  < match_threshold:
             match_pairs.append([i[0], int(i[1][0][0])])  # Without cast 2nd element is array object
     # END
@@ -575,7 +577,7 @@ def shift_sift_descriptor(desc):
         hist_bins[1:] = np.flip(desc[i, 1:])
         hist_arr[i] = hist_bins
     
-    res = np.zeros((desc.shape))
+    res = np.zeros(desc.shape)
     j = 0
     while j < num_hist:
         res[-j-4] = hist_arr[j]
@@ -609,13 +611,31 @@ def match_mirror_descriptors(descs, mirror_descs, threshold = 0.7):
     '''
     First use `top_k_matches` to find the nearest 3 matches for each keypoint. Then eliminate the mirror descriptor that comes 
     from the same keypoint. Perform ratio test on the two matches left. If no descriptor is eliminated, perform the ratio test 
-    on the best 2. 
+    on the best 2.
     '''
     three_matches = top_k_matches(descs, mirror_descs, k=3)
 
     match_result = []
     # YOUR CODE HERE
-    
+    for match_set in three_matches:
+        point = match_set[0]
+        match_points = match_set[1]
+        match1, match2, match3 = match_points[0][0][0], match_points[1][0][0], match_points[2][0][0]
+        if point == match1:
+            match_points = np.delete(match_points, 0, axis=0)
+        elif point == match2:
+            match_points = np.delete(match_points, 1, axis=0)
+        elif point == match3:
+            match_points = np.delete(match_points, 2, axis=0)
+        
+        m = list(match_points)
+        m.sort(key=lambda x : x[1])
+        # print(match_points)
+        # print(m)
+        top_two = np.array([m[0][0][0], m[1][0][0]])
+        if m[0][1] / m[1][1] < threshold:
+            match_result.append([point, m[0][0][0]])
+    match_result = np.array(match_result)
 
     # END
     return match_result
