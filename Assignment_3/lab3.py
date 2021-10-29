@@ -655,13 +655,13 @@ def find_symmetry_lines(matches, kps):
     mir_kps = kps[matches[:, 1]]
 
     for i in range(num_matches):
-        x_ori, y_ori = ori_kps[i, 0], ori_kps[i, 1]
-        x_mir, y_mir = mir_kps[i, 0], mir_kps[i, 1]
+        x_ori, y_ori = ori_kps[i, 1], ori_kps[i, 0]
+        x_mir, y_mir = mir_kps[i, 1], mir_kps[i, 0]
         x_mid = (x_ori + x_mir) / 2
         y_mid = (y_ori + y_mir) / 2
         # print(str(x_ori) + " " + str(x_mir) + " " + str(x_mid))
         # print(str(y_ori) + " " + str(y_mir) + " " + str(y_mid))
-        theta = angle_with_x_axis([x_ori, y_ori], [x_mir, y_mir])
+        theta = angle_with_x_axis([y_ori, x_ori], [y_mir, x_mir])
         rho = x_mid * math.cos(theta) + y_mid * math.sin(theta)
         # print(f"{rho} with {theta}")
         rhos.append(rho)
@@ -704,9 +704,9 @@ def hough_vote_mirror(matches, kps, im_shape, window=1, threshold=0.5, num_lines
     for i in range(rhos.shape[0]):
         # print(f"{rhos[i]} with {thetas[i]}")
         # Find 1st True value as 1st occurrence of max, bin is <= input
-        y = np.argmax(rho_bins > rhos[i]) - 1
+        y = np.argmax(rho_bins > rhos[i])
         # print(str(rho_bins[y]) + " <- " + str(rhos[i]))
-        x = np.argmax(theta_bins > thetas[i]) - 1
+        x = np.argmax(theta_bins > thetas[i])
         # print(str(theta_bins[x]) + " <- " + str(thetas[i]))
         A[y, x] += 1
     
