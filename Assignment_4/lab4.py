@@ -29,7 +29,23 @@ def detect_points(img, min_distance, rou, pt_num, patch_size, tau_rou, gamma_rou
     Np = pt_num * 0.9 # The required number of keypoints for each patch. `pt_num` is used as a parameter, while `Np` is used as a stopping criterion.
 
     # YOUR CODE HERE
-
+    P = h // 50
+    Q = w // 50
+    pts = []
+    for i in range(P):
+        for j in range(Q):
+            Patch = img_gray[i * 50: (i + 1) * 50, j * 50: (j + 1) * 50]
+            kp = cv2.goodFeaturesToTrack(Patch, maxCorners=pt_num, qualityLevel=rou, minDistance=min_distance)
+            temp_rho = rou
+            while (len(kp) <= int(Np)) and (temp_rho > tau_rou):
+                temp_rho = temp_rho * gamma_rou
+                kp = cv2.goodFeaturesToTrack(Patch, maxCorners=pt_num, qualityLevel=temp_rho, minDistance=min_distance)
+            kp = kp.reshape(len(kp), 2)
+            for _ in range(len(kp)):
+                kp[_][0] += i * 50
+                kp[_][1] += j * 50
+            pts.extend(kp)
+    pts = np.array(pts)
     # END
 
     return pts
@@ -60,7 +76,7 @@ def extract_point_features(img, pts, window_patch):
     h, w, c = img.shape
 
     # YOUR CODE HERE
-
+    
     # End
 
     return pts, features
