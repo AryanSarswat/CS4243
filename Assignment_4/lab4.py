@@ -76,12 +76,27 @@ def extract_point_features(img, pts, window_patch):
     h, w, c = img.shape
 
     # YOUR CODE HERE
-    
+    new_pts = []
+    features = []
+    for i in pts:
+        x_i = i[0]
+        y_i = i[1]
+        feature_x_min = int(x_i - window_patch)
+        feature_x_max = int(x_i + window_patch + 1)
+        feature_y_min = int(y_i - window_patch)
+        feature_y_max = int(y_i + window_patch + 1)
+        if feature_x_min >= 0 and feature_x_max < h and feature_y_min >= 0 and feature_y_max < w:
+            patch = img_gray[feature_x_min:feature_x_max, feature_y_min:feature_y_max]
+            new_pts.append(i)
+            patch = patch.flatten()
+            patch = patch / np.linalg.norm(patch)
+            features.append(patch)
+    features = np.array(features)
+    pts = np.array(new_pts)
     # End
-
     return pts, features
 
-def mean_shift_clustering(features, bandwidth):
+def mean_shift_clustering(features, bandwidth, gamma_h = 1.1):
     """
     Mean-Shift Clustering.
 
@@ -101,10 +116,46 @@ def mean_shift_clustering(features, bandwidth):
                     3. bandwidth: bandwith value
     """
     # YOUR CODE HERE
-
+    X = np.copy(features)
+    
+    past_X =[]
+    
+    n_iterations = 10
+    temp_h = bandwidth
+    for it in range(n_iterations):
+        for i, x in enumerate(X):
+            neighbours = neighborhood_points(X , x, temp_h)
+            
+            numerator = 0
+            denominator = 0
+            for neighbour in neighbours:
+                distance = np.linalg.norm(x - neighbour)
+                weight = gaussian_kernel(distance, bandwidth)
+                numerator += (weight * neighbour)
+                denominator += weight
+                    
+            new_x = numerator / denominator
+            X[i] = new_x
+            
+        temp_h = temp_h * gamma_h
+    
+    X = np.round(X, decimals=1)
+    clusters = np.unique(X, axis = 0)
+    labels = np.array([np.where(i == clusters)[0][0] for i in X])
+    clustering = {'cluster_centers_': clusters, 'labels_': labels, 'bandwidth': bandwidth}
     # END
 
     return clustering
+
+def neighborhood_points(features, centroid, bandwidth):
+    diff = features - centroid
+    norm = np.linalg.norm(diff, axis=1)
+    in_bandwidth = features[np.where(norm < bandwidth)]
+    return in_bandwidth
+
+def gaussian_kernel(distance, bandwidth):
+    val = (1/(bandwidth*math.sqrt(2*math.pi))) * np.exp(-0.5*((distance / bandwidth))**2)
+    return val
 
 def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h):
     """
@@ -129,8 +180,25 @@ def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h):
     h, w, c = img.shape
 
     # YOUR CODE HERE
-
-
+    clustering = mean_shift_clustering(features, bandwidth, gamma_h=gamma_h)
+    centers = clustering['cluster_centers_']
+    labels = clustering['labels_']
+    
+    
+    points_in_cluster = [(pts[np.where(labels == i)],features[np.where(labels == i)]) for i in range(len(centers))]
+    clusters = []
+    for i in points_in_cluster:
+        num_points = len(i[0])
+        if num_points >= tau1:
+            if num_points > tau2:
+                K = num_points // tau2
+                kmeans = KMeans(n_clusters=K).fit(i[1])
+                i_pts = i[0]
+                app = [i_pts[np.where(kmeans.labels_ == j)] for j in range(K)]
+                clusters.extend(app)
+            else:
+                clusters.append(i[0])
+    clusters = np.array(clusters)
     # END
 
     return clusters
