@@ -92,7 +92,7 @@ def extract_point_features(img, pts, window_patch):
             p_mean = np.mean(patch)
             p_std = np.std(patch)
             if p_std == 0:
-                patch = np.ones(patch.shape)
+                patch = np.zeros(patch.shape)
             else:
                 patch = (patch - p_mean) / p_std
             features.append(patch)
@@ -100,6 +100,8 @@ def extract_point_features(img, pts, window_patch):
     pts = np.array(new_pts)
     # End
     return pts, features
+
+from tqdm import tqdm
 
 def mean_shift_clustering(features, bandwidth, gamma_h = 1.1, n_iterations = 10):
     """
@@ -123,10 +125,8 @@ def mean_shift_clustering(features, bandwidth, gamma_h = 1.1, n_iterations = 10)
     # YOUR CODE HERE
     X = np.copy(features)
     
-    past_X =[]
-    
     temp_h = bandwidth
-    for it in range(n_iterations):
+    for it in tqdm(range(n_iterations)):
         for i, x in enumerate(X):
             neighbours = neighborhood_points(X , x, temp_h)
             if len(neighbours) != 0: 
@@ -139,10 +139,11 @@ def mean_shift_clustering(features, bandwidth, gamma_h = 1.1, n_iterations = 10)
                 denominator = weights.sum()
                 new_feature = numerator / denominator
                 X[i] = new_feature[0]
-            
+                    
         temp_h = temp_h * gamma_h
-        
-    X = np.around(X, decimals=1)
+
+  
+    X = np.around(X, decimals=0)
     clusters = np.unique(X, axis = 0)
     labels = np.zeros(features.shape[0]).astype(int)
     for i in range(len(X)):
@@ -162,7 +163,7 @@ def gaussian_kernel(distance, bandwidth = None):
     val = (1/(bandwidth*math.sqrt(2*math.pi))) * np.exp(-0.5*((distance / bandwidth))**2)
     return val
 
-def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h):
+def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h, n_iterations = 10):
     """
     Group points with similar appearance, then refine the groups.
 
@@ -185,7 +186,7 @@ def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h):
     h, w, c = img.shape
 
     # YOUR CODE HERE
-    clustering = mean_shift_clustering(features, bandwidth, gamma_h=gamma_h, n_iterations=15)
+    clustering = mean_shift_clustering(features, bandwidth, gamma_h=gamma_h, n_iterations= n_iterations)
     centers = clustering['cluster_centers_']
     labels = clustering['labels_']
     
@@ -212,25 +213,25 @@ def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h):
 
 def transform(point, M):
     input_pts = np.insert(point, 2, values=1, axis=1)
-    transformed = np.zeros_like(input_pts)
     transformed = M.dot(input_pts.transpose())
     transformed = transformed.transpose().astype(np.float32)
     return transformed
 
-def angle_with_x_axis(pi, pj):  
+def angle_bw_edges(p0, p1, p2):  
     '''
     Compute the angle that the line connecting two points I and J make with the x-axis (mind our coordinate convention)
     Do note that the line direction is from point I to point J.
     '''
     # get the difference between point p1 and p2
-    y, x = pi[0]-pj[0], pi[1]-pj[1] 
+    v1 = p0 - p1
+    v2 = p0 - p2
+    num = np.dot(v1, v2)
+    denom = np.linalg.norm(v1) * np.linalg.norm(v2)
     
-    if x == 0:
-        return np.pi/2  
-    
-    angle = np.arctan(x/y)
-    if angle < 0:
-        angle += np.pi
+    costheta = num/denom
+    angle = np.arccos(costheta)*180/np.pi
+    if np.isnan(angle):
+        angle = 180
     return angle
 
 def get_proposal(pts_cluster, tau_a, X):
@@ -274,6 +275,7 @@ def get_proposal(pts_cluster, tau_a, X):
     max_num_inlier = -1
     max_inliers = []
     max_triplet = []
+    max_dist = -1
         
     for _ in range(N_a):
         #Get a random point
@@ -281,11 +283,14 @@ def get_proposal(pts_cluster, tau_a, X):
         point = pts_cluster[ind]
         
         #X-nearest points
-        X_nearest_ind = np.argsort(np.linalg.norm(point - pts_cluster, axis = 1).flatten())[:X]
+        X_nearest_ind = np.argsort(np.linalg.norm(pts_cluster - point, axis = 1).flatten())[:X]
         X_nearest_pts = pts_cluster[X_nearest_ind]
         
+        
         #Determine A, B, C
-        three_nearest_pts = X_nearest_pts[:3]
+        rand_ind = np.random.randint(1, X_nearest_ind.shape[0], size = 2)
+        indices = np.append(rand_ind, 0)
+        three_nearest_pts = X_nearest_pts[indices]
         dists = []
         for i in range(3):
             for j in range(i+1, 3):
@@ -302,10 +307,8 @@ def get_proposal(pts_cluster, tau_a, X):
             triplet = [three_nearest_pts[2], three_nearest_pts[longest_edge[0]], three_nearest_pts[longest_edge[1]]]
         
         #Check angle
-        a_b = angle_with_x_axis(triplet[0], triplet[1])*180/np.pi
-        a_c = angle_with_x_axis(triplet[0], triplet[2])*180/np.pi
-        
-        if 20 < a_b < 120 and 20 < a_c < 120:
+       
+        if 20 < angle_bw_edges(triplet[0], triplet[1], triplet[2]) < 120:
             #Find M
             src = np.array(triplet).astype(np.float32)
             dst = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
@@ -314,25 +317,39 @@ def get_proposal(pts_cluster, tau_a, X):
             #Transform Coords
             transformed = transform(X_nearest_pts, M)
             transformed_int = np.round(transformed).astype(np.int32)
+            unique_ind = np.unique(transformed_int, axis = 0, return_index = True)[1]
+                
+            #Remove duplicates
+            transformed_int = transformed_int[unique_ind]
+            transformed = transformed[unique_ind]
                 
             diff = np.sum((transformed_int - transformed)**2, axis=1)
-                
+                    
             num_inliers = np.sum(diff < tau_a)
+            #print(f'Inliers : {num_inliers}')
                 
-            if num_inliers > max_num_inlier:
+            if num_inliers > max_num_inlier:    
                 max_num_inlier = num_inliers
-                max_inliers = [X_nearest_pts, transformed_int]
+                max_inliers = [X_nearest_pts[unique_ind], transformed_int]
                 max_triplet = triplet
+                max_dist = np.sum(np.abs(dists[:,1]))
+        
+            elif num_inliers == max_num_inlier:
+                if np.sum(np.abs(dists[:,1])) < max_dist:
+                    max_num_inlier = num_inliers
+                    max_inliers = [X_nearest_pts[unique_ind], transformed_int]
+                    max_triplet = triplet
+                    max_dist = np.sum(np.abs(dists[:,1]))
     
     basis = [[0,0], [1,0], [0,1]]
     for i in range(len(max_triplet)):
         proposal.append({'pt_int': basis[i], 'pt': max_triplet[i]})
     
     if max_inliers != []: 
-        for i in range(3,len(max_inliers[0])):
-            proposal.append({'pt_int': max_inliers[1][i], 'pt': max_inliers[0][i]})
+        for i in range(len(max_inliers[0])):
+            if not (max_inliers[1][i].tolist() in basis):
+                proposal.append({'pt_int': max_inliers[1][i], 'pt': max_inliers[0][i]})
     # END
-
     return proposal
 
 
@@ -364,7 +381,41 @@ def find_texels(img, proposal, texel_size=50):
         texels: A numpy ndarray of the shape (#texels, texel_size, texel_size, #channels).
     """
     # YOUR CODE HERE
+    texels = []
+    pt_int = []
+    pt = []
+    for i in proposal:
+        pt_int.append(i['pt_int'])
+        pt.append(i['pt'])
+    
+    pt_int = np.array(pt_int)
+    pt = np.array(pt)
+    
+    for i in pt_int:
+        dist = np.linalg.norm(pt_int - i, axis = 1)
+        dist_valid = np.where(dist <= 1)
+        
+        selected_pt_int = pt_int[dist_valid]
+        selected_pt = pt[dist_valid]
+        selected_dist = dist[dist_valid]
+        
+        sort_ind = np.argsort(selected_dist)[:3]
+        sort_pt_int = selected_pt_int[sort_ind]
+        sort_pt = selected_pt[sort_ind]
+        
+        if sort_ind.shape[0] == 3:
+            corners_src = sort_pt.astype(np.float32)
+            point_fourth = corners_src[1] + (corners_src[0] - corners_src[1]) + (corners_src[2] - corners_src[1])
+            corners_src = np.append(corners_src, point_fourth).astype(np.float32)
+            corners_dst = np.float32([[ 0,  0],
+                          [texel_size,  0],
+                          [texel_size, texel_size],
+                          [0, texel_size]])
 
+            matrix_projective = cv2.getPerspectiveTransform(corners_src[:, [1, 0]], corners_dst) # transpose (h, w), as the input argument of cv2.getPerspectiveTransform is (w, h) ordering
+            img_demo_warped = cv2.warpPerspective(img, matrix_projective, (texel_size, texel_size))
+            texels.append(img_demo_warped)
+        
     # END
     return texels
 
