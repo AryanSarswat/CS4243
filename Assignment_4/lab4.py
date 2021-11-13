@@ -41,9 +41,9 @@ def detect_points(img, min_distance, rou, pt_num, patch_size, tau_rou, gamma_rou
                 temp_rho = temp_rho * gamma_rou
                 kp = cv2.goodFeaturesToTrack(Patch, maxCorners=pt_num, qualityLevel=temp_rho, minDistance=min_distance)
             kp = kp.reshape(len(kp), 2)
-            for _ in range(len(kp)):
-                kp[_][0] += i * 50
-                kp[_][1] += j * 50
+            for k in range(len(kp)):
+                kp[k][0] += i * 50
+                kp[k][1] += j * 50
             pts.extend(kp)
     pts = np.array(pts)
     # END
@@ -89,14 +89,19 @@ def extract_point_features(img, pts, window_patch):
             patch = img_gray[feature_x_min:feature_x_max, feature_y_min:feature_y_max]
             new_pts.append(i)
             patch = patch.flatten()
-            patch = patch / np.linalg.norm(patch)
+            p_mean = np.mean(patch)
+            p_std = np.std(patch)
+            if p_std == 0:
+                patch = np.ones(patch.shape)
+            else:
+                patch = (patch - p_mean) / p_std
             features.append(patch)
     features = np.array(features)
     pts = np.array(new_pts)
     # End
     return pts, features
 
-def mean_shift_clustering(features, bandwidth, gamma_h = 1.1):
+def mean_shift_clustering(features, bandwidth, gamma_h = 1.1, n_iterations = 10):
     """
     Mean-Shift Clustering.
 
@@ -120,31 +125,31 @@ def mean_shift_clustering(features, bandwidth, gamma_h = 1.1):
     
     past_X =[]
     
-    n_iterations = 10
     temp_h = bandwidth
     for it in range(n_iterations):
         for i, x in enumerate(X):
             neighbours = neighborhood_points(X , x, temp_h)
-            
-            numerator = 0
-            denominator = 0
-            for neighbour in neighbours:
-                distance = np.linalg.norm(x - neighbour)
-                weight = gaussian_kernel(distance, bandwidth)
-                numerator += (weight * neighbour)
-                denominator += weight
-                    
-            new_x = numerator / denominator
-            X[i] = new_x
+            if len(neighbours) != 0: 
+                numerator = 0
+                denominator = 0
+                distances = np.linalg.norm(neighbours - x, axis = 1)
+                weights = gaussian_kernel(distances, bandwidth = temp_h)
+                mult = np.dstack(([weights for i in range(features.shape[1])]))
+                numerator = np.sum(mult * neighbours, axis = 1)
+                denominator = weights.sum()
+                new_feature = numerator / denominator
+                X[i] = new_feature[0]
             
         temp_h = temp_h * gamma_h
-    
-    X = np.round(X, decimals=1)
+        
+    X = np.around(X, decimals=1)
     clusters = np.unique(X, axis = 0)
-    labels = np.array([np.where(i == clusters)[0][0] for i in X])
+    labels = np.zeros(features.shape[0]).astype(int)
+    for i in range(len(X)):
+        l = np.argwhere((clusters == X[i]).all(1))
+        labels[i] = int(l[0])
     clustering = {'cluster_centers_': clusters, 'labels_': labels, 'bandwidth': bandwidth}
     # END
-
     return clustering
 
 def neighborhood_points(features, centroid, bandwidth):
@@ -153,7 +158,7 @@ def neighborhood_points(features, centroid, bandwidth):
     in_bandwidth = features[np.where(norm < bandwidth)]
     return in_bandwidth
 
-def gaussian_kernel(distance, bandwidth):
+def gaussian_kernel(distance, bandwidth = None):
     val = (1/(bandwidth*math.sqrt(2*math.pi))) * np.exp(-0.5*((distance / bandwidth))**2)
     return val
 
@@ -180,24 +185,24 @@ def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h):
     h, w, c = img.shape
 
     # YOUR CODE HERE
-    clustering = mean_shift_clustering(features, bandwidth, gamma_h=gamma_h)
+    clustering = mean_shift_clustering(features, bandwidth, gamma_h=gamma_h, n_iterations=15)
     centers = clustering['cluster_centers_']
     labels = clustering['labels_']
     
     
     points_in_cluster = [(pts[np.where(labels == i)],features[np.where(labels == i)]) for i in range(len(centers))]
     clusters = []
-    for i in points_in_cluster:
-        num_points = len(i[0])
-        if num_points >= tau1:
+    for cluster in points_in_cluster:
+        num_points = len(cluster[0])
+        if num_points > tau1:
             if num_points > tau2:
                 K = num_points // tau2
-                kmeans = KMeans(n_clusters=K).fit(i[1])
-                i_pts = i[0]
+                kmeans = KMeans(n_clusters=K).fit(cluster[1])
+                i_pts = cluster[0]
                 app = [i_pts[np.where(kmeans.labels_ == j)] for j in range(K)]
                 clusters.extend(app)
             else:
-                clusters.append(i[0])
+                clusters.append(cluster[0])
     clusters = np.array(clusters)
     # END
 
@@ -205,6 +210,28 @@ def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h):
 
 ### Part 2
 
+def transform(point, M):
+    input_pts = np.insert(point, 2, values=1, axis=1)
+    transformed = np.zeros_like(input_pts)
+    transformed = M.dot(input_pts.transpose())
+    transformed = transformed.transpose().astype(np.float32)
+    return transformed
+
+def angle_with_x_axis(pi, pj):  
+    '''
+    Compute the angle that the line connecting two points I and J make with the x-axis (mind our coordinate convention)
+    Do note that the line direction is from point I to point J.
+    '''
+    # get the difference between point p1 and p2
+    y, x = pi[0]-pj[0], pi[1]-pj[1] 
+    
+    if x == 0:
+        return np.pi/2  
+    
+    angle = np.arctan(x/y)
+    if angle < 0:
+        angle += np.pi
+    return angle
 
 def get_proposal(pts_cluster, tau_a, X):
     """
@@ -235,10 +262,75 @@ def get_proposal(pts_cluster, tau_a, X):
         X: When we compute the inliers, we only consider X nearest points to the point "a". 
     Returns:
         proposal: A list of inliers. The first 3 inliers are {a, b, c}. 
-                  Each inlier is a dictionary, with key of "pt_int" and "pt" representing the integer positions after affine transformation and orignal coordinates.
+                  Each inlier is a dictionary, with key of "pt_int" and "pt" representing the integer positions after affine transformation and original coordinates.
     """
     # YOU CODE HERE
+    proposal = []
+    
+    
 
+    N_a = len(pts_cluster) * 45
+        
+    max_num_inlier = -1
+    max_inliers = []
+    max_triplet = []
+        
+    for _ in range(N_a):
+        #Get a random point
+        ind = np.random.randint(0, len(pts_cluster))
+        point = pts_cluster[ind]
+        
+        #X-nearest points
+        X_nearest_ind = np.argsort(np.linalg.norm(point - pts_cluster, axis = 1).flatten())[:X]
+        X_nearest_pts = pts_cluster[X_nearest_ind]
+        
+        #Determine A, B, C
+        three_nearest_pts = X_nearest_pts[:3]
+        dists = []
+        for i in range(3):
+            for j in range(i+1, 3):
+                dists.append([(i,j), np.linalg.norm(three_nearest_pts[i] - three_nearest_pts[j])])
+        dists = np.array(dists)
+        max_ind = np.argmax(dists[:,1])
+        longest_edge = dists[max_ind][0]
+        triplet = []
+        if 0 not in longest_edge:
+            triplet = [three_nearest_pts[0], three_nearest_pts[longest_edge[0]], three_nearest_pts[longest_edge[1]]]
+        elif 1 not in longest_edge:
+            triplet = [three_nearest_pts[1], three_nearest_pts[longest_edge[0]], three_nearest_pts[longest_edge[1]]]
+        else:
+            triplet = [three_nearest_pts[2], three_nearest_pts[longest_edge[0]], three_nearest_pts[longest_edge[1]]]
+        
+        #Check angle
+        a_b = angle_with_x_axis(triplet[0], triplet[1])*180/np.pi
+        a_c = angle_with_x_axis(triplet[0], triplet[2])*180/np.pi
+        
+        if 20 < a_b < 120 and 20 < a_c < 120:
+            #Find M
+            src = np.array(triplet).astype(np.float32)
+            dst = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
+            M = cv2.getAffineTransform(src, dst)
+                
+            #Transform Coords
+            transformed = transform(X_nearest_pts, M)
+            transformed_int = np.round(transformed).astype(np.int32)
+                
+            diff = np.sum((transformed_int - transformed)**2, axis=1)
+                
+            num_inliers = np.sum(diff < tau_a)
+                
+            if num_inliers > max_num_inlier:
+                max_num_inlier = num_inliers
+                max_inliers = [X_nearest_pts, transformed_int]
+                max_triplet = triplet
+    
+    basis = [[0,0], [1,0], [0,1]]
+    for i in range(len(max_triplet)):
+        proposal.append({'pt_int': basis[i], 'pt': max_triplet[i]})
+    
+    if max_inliers != []: 
+        for i in range(3,len(max_inliers[0])):
+            proposal.append({'pt_int': max_inliers[1][i], 'pt': max_inliers[0][i]})
     # END
 
     return proposal
