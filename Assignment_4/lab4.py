@@ -500,6 +500,21 @@ def template_match(img, proposal, threshold):
         response: A sparse response map from non-maximum suppression. 
     """
     # YOUR CODE HERE
+    # proposal format = list of inliers {'pt_int': array([0, 0]), 'pt': array([ 51, 694])}. 'pt' is actual inlier
+    # Take top 3 inliers (int(proposal[0]['pt'][1]), int(proposal[0]['pt'][0])), (int(proposal[1]['pt'][1]), int(proposal[1]['pt'][0])), (int(proposal[2]['pt'][1]), int(proposal[2]['pt'][0]))
+    a = [proposal[0]['pt'][1], proposal[0]['pt'][0]]
+    b = [proposal[1]['pt'][1], proposal[1]['pt'][0]]
+    c = [proposal[2]['pt'][1], proposal[2]['pt'][0]]
+    # midpointBC = ((b[0] + c[0]) / 2, (b[1] + c[1]) / 2)
+    # distAToMidBC = (midpointBC[0] - a[0], midpointBC[1] - a[1])
+    # d = (midpointBC[0] + distAToMidBC, midpointBC[1] + distAToMidBC)
+
+    d = a + (b - a) + (c - a)
+
+    # Template left top edge = (b_x, d_y), right bottom edge = (c_x, a_y)
+    template = img[d[0]:a[0], b[0]:c[0], :]
+    response = cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED)
+    response = non_max_suppression(response, template.shape, threshold)
 
     # END
     return response
@@ -519,7 +534,22 @@ def maxima2grid(img, proposal, response):
     
     """
     # YOUR CODE HERE
+    a = [proposal[0]['pt'][1], proposal[0]['pt'][0]]
+    b = [proposal[1]['pt'][1], proposal[1]['pt'][0]]
+    c = [proposal[2]['pt'][1], proposal[2]['pt'][0]]
+    d = a + (b - a) + (c - a)
+    offset1 = (d - a) / 2
+    offset2 = (c - b) / 2
 
+    points_grid = []
+    for i, j in response.shape:
+        if response[i, j] > 0:
+            center = np.array([i, j])
+            points_grid.append(center - offset1)
+            points_grid.append(center + offset1)
+            points_grid.append(center - offset2)
+            points_grid.append(center + offset2)
+    points_grid = np.array(points_grid)
     # END
 
     return points_grid
@@ -535,7 +565,7 @@ def refine_grid(img, proposal, points_grid):
         points: A numpy ndarray of shape (N, 2), where N is the number of refined grid points.
     """
     # YOUR CODE HERE
-
+    
     # END
 
     return points
