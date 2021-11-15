@@ -512,7 +512,7 @@ def template_match(img, proposal, threshold):
     d = a + (b - a) + (c - a)
 
     # Template left top edge = (b_x, d_y), right bottom edge = (c_x, a_y)
-    template = img[d[0]:a[0], b[0]:c[0], :]
+    template = img[d[1]:a[1], b[0]:c[0], :]
     response = cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED)
     response = non_max_suppression(response, template.shape, threshold)
 
@@ -542,19 +542,22 @@ def maxima2grid(img, proposal, response):
     offset2 = (c - b) / 2
 
     points_grid = []
+    maxima = []
     for i, j in response.shape:
         if response[i, j] > 0:
+            maxima.append([i, j])
             center = np.array([i, j])
             points_grid.append(center - offset1)
             points_grid.append(center + offset1)
             points_grid.append(center - offset2)
             points_grid.append(center + offset2)
     points_grid = np.array(points_grid)
+    maxima = np.array(maxima)
     # END
 
-    return points_grid
+    return points_grid, maxima
 
-def refine_grid(img, proposal, points_grid):
+def refine_grid(img, proposal, points_grid, maxima):
     """
     Refine the detected grid points.
 
@@ -565,7 +568,29 @@ def refine_grid(img, proposal, points_grid):
         points: A numpy ndarray of shape (N, 2), where N is the number of refined grid points.
     """
     # YOUR CODE HERE
+    a = [proposal[0]['pt'][1], proposal[0]['pt'][0]]
+    b = [proposal[1]['pt'][1], proposal[1]['pt'][0]]
+    c = [proposal[2]['pt'][1], proposal[2]['pt'][0]]
+    d = a + (b - a) + (c - a)
+    points = []
+
+    merge_points = []
+    # points = np.unique(points_grid, axis=0)
+    for i in range(0, points_grid.shape[0]-1):
+        for j in range(i+1, points_grid.shape):
+            if points_grid[i] == points_grid[j]:
+                merge_points.append([i, j])
+                break
+        points.append(points_grid[i])
     
+    for merge_point in merge_points:
+        # Every 4 grid points produced from one maximum
+        maxi1 = maxima[merge_point[0] / 4]
+        maxi2 = maxima[merge_point[1] / 4]
+        new_point = (maxi1 + maxi2) / 2
+        points.append(new_point)
+
+    points = np.array(points)
     # END
 
     return points
@@ -590,13 +615,65 @@ def grid2latticeunit(img, proposal, points):
         edges: A list of edges in the lattice structure. Each edge is defined by two points. The point coordinate is in the image coordinate.
     """
 
-    # YOUR CODE HERE
+    # # YOUR CODE HERE
+    a = [proposal[0]['pt'][1], proposal[0]['pt'][0]]
+    b = [proposal[1]['pt'][1], proposal[1]['pt'][0]]
+    c = [proposal[2]['pt'][1], proposal[2]['pt'][0]]
+    
+    ori_grid = np.array([a, b, c]).astype(np.float32)
+    final_grid = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
+    M = cv2.getAffineTransform(ori_grid, final_grid)
 
-    # END
+    edges = []
+    # Transform each pair of grid points & check their distance
+    for i in range(points.shape[0]-1):
+        for j in range(i+1, points.shape[0]):
+            affine_i = transform(points[i])
+            affine_j = transform(points[j])
+            if int(np.linalg.norm(affine_i - affine_j)) == 1:
+                edges.append([points[i], points[j]])
 
     return edges
 
+### Part 4
 
+def detect_points_whole(img, min_distance, rou, N_p, patch_size, tau_rou, gamma_rou):
+    """
+    Patchwise Shi-Tomasi point extraction.
+
+    Hints:
+    (1) You may find the function cv2.goodFeaturesToTrack helpful. The initial default parameter setting is given in the notebook.
+
+    Args:
+        img: Input RGB image. 
+        min_distance: Minimum possible Euclidean distance between the returned corners. A parameter of cv2.goodFeaturesToTrack
+        rou: Parameter characterizing the minimal accepted quality of image corners. A parameter of cv2.goodFeaturesToTrack
+        pt_num: Maximum number of corners to return. A parameter of cv2.goodFeaturesToTrack
+        patch_size: Size of each patch. The image is divided into several patches of shape (patch_size, patch_size). There are ((h / patch_size) * (w / patch_size)) patches in total given a image of (h x w)
+        tau_rou: If rou falls below this threshold, stops keypoint detection for that patch
+        gamma_rou: Decay rou by a factor of gamma_rou to detect more points.
+    Returns:
+        pts: Detected points of shape (N, 2), where N is the number of detected points. Each point is saved as the order of (height-corrdinate, width-corrdinate)
+    """
+    img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    h, w, c = img.shape
+
+    # YOUR CODE HERE
+    pts = []
+    P = h // 50
+    Q = w // 50
+    max_corners = P * Q * N_p
+    kp = cv2.goodFeaturesToTrack(img_gray, maxCorners=max_corners, qualityLevel=rou, minDistance=min_distance)
+    temp_rho = rou
+    while (len(kp) <= int(max_corners)) and (temp_rho > tau_rou):
+        temp_rho = temp_rho * gamma_rou
+        kp = cv2.goodFeaturesToTrack(img_gray, maxCorners=max_corners, qualityLevel=temp_rho, minDistance=min_distance)
+    kp = kp.reshape(len(kp), 2)
+    pts.extend(kp)
+    pts = np.array(pts)
+    # END
+
+    return pts
 
 
 
