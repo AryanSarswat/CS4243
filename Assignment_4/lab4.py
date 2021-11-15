@@ -513,7 +513,10 @@ def template_match(img, proposal, threshold):
 
     # Template left top edge = (b_x, d_y), right bottom edge = (c_x, a_y)
     template = img[d[1]:a[1], b[0]:c[0], :]
-    response = cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED)
+    top_bottom_pad = int(template.shape[0] / 2)
+    left_right_pad = int(template.shape[1] / 2)
+    img_padded = cv2.copyMakeBorder(img, top_bottom_pad, top_bottom_pad, left_right_pad, left_right_pad, cv2.BORDER_CONSTANT, None, 0)
+    response = cv2.matchTemplate(img_padded, template, cv2.TM_CCOEFF_NORMED)
     response = non_max_suppression(response, template.shape, threshold)
 
     # END
