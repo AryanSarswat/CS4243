@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import math
+from numpy import core
 from sklearn.cluster import KMeans
 
 ### Part 1
@@ -91,19 +92,14 @@ def extract_point_features(img, pts, window_patch):
             patch = patch.flatten()
             p_mean = np.mean(patch)
             p_std = np.std(patch)
-            if p_std == 0:
-                patch = np.zeros(patch.shape)
-            else:
-                patch = (patch - p_mean) / p_std
+            patch = (patch - p_mean) / (p_std + 1e-6)
             features.append(patch)
     features = np.array(features)
     pts = np.array(new_pts)
     # End
     return pts, features
 
-from tqdm import tqdm
-
-def mean_shift_clustering(features, bandwidth, gamma_h = 1.1, n_iterations = 10):
+def mean_shift_clustering(features, bandwidth, gamma_h = 1.1):
     """
     Mean-Shift Clustering.
 
@@ -123,31 +119,36 @@ def mean_shift_clustering(features, bandwidth, gamma_h = 1.1, n_iterations = 10)
                     3. bandwidth: bandwith value
     """
     # YOUR CODE HERE
-    X = np.copy(features)
+    prev_centroids = np.copy(features)
     
     temp_h = bandwidth
-    for it in tqdm(range(n_iterations)):
-        for i, x in enumerate(X):
-            neighbours = neighborhood_points(X , x, temp_h)
+    while True:
+        new_centroids = np.zeros(prev_centroids.shape)
+        for i, x in enumerate(prev_centroids):
+            neighbours = neighborhood_points(prev_centroids , x, temp_h)
             if len(neighbours) != 0: 
                 numerator = 0
                 denominator = 0
                 distances = np.linalg.norm(neighbours - x, axis = 1)
                 weights = gaussian_kernel(distances, bandwidth = temp_h)
-                mult = np.dstack(([weights for i in range(features.shape[1])]))
+                mult = np.dstack(([weights for i in range(neighbours.shape[1])]))
                 numerator = np.sum(mult * neighbours, axis = 1)
                 denominator = weights.sum()
                 new_feature = numerator / denominator
-                X[i] = new_feature[0]
-                    
+                new_centroids[i] = new_feature[0]
         temp_h = temp_h * gamma_h
+        if np.sum(np.abs(prev_centroids - new_centroids)) < 1e-6:
+            prev_centroids = new_centroids
+            break
+        else:
+            prev_centroids = new_centroids
 
   
-    X = np.around(X, decimals=0)
-    clusters = np.unique(X, axis = 0)
+    prev_centroids = np.around(prev_centroids)
+    clusters = np.unique(prev_centroids, axis = 0)
     labels = np.zeros(features.shape[0]).astype(int)
-    for i in range(len(X)):
-        l = np.argwhere((clusters == X[i]).all(1))
+    for i in range(len(prev_centroids)):
+        l = np.argwhere((clusters == prev_centroids[i]).all(1))
         labels[i] = int(l[0])
     clustering = {'cluster_centers_': clusters, 'labels_': labels, 'bandwidth': bandwidth}
     # END
@@ -160,10 +161,10 @@ def neighborhood_points(features, centroid, bandwidth):
     return in_bandwidth
 
 def gaussian_kernel(distance, bandwidth = None):
-    val = (1/(bandwidth*math.sqrt(2*math.pi))) * np.exp(-0.5*((distance / bandwidth))**2)
+    val = (1/(bandwidth*math.sqrt(2*math.pi))) * np.exp(-0.5*((distance / bandwidth)**2))
     return val
 
-def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h, n_iterations = 10):
+def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h):
     """
     Group points with similar appearance, then refine the groups.
 
@@ -186,12 +187,12 @@ def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h, n_iterations = 1
     h, w, c = img.shape
 
     # YOUR CODE HERE
-    clustering = mean_shift_clustering(features, bandwidth, gamma_h=gamma_h, n_iterations= n_iterations)
+    clustering = mean_shift_clustering(features, bandwidth, gamma_h=gamma_h)
     centers = clustering['cluster_centers_']
     labels = clustering['labels_']
     
     
-    points_in_cluster = [(pts[np.where(labels == i)],features[np.where(labels == i)]) for i in range(len(centers))]
+    points_in_cluster = [(pts[np.where(labels == i)], features[np.where(labels == i)]) for i in range(len(centers))]
     clusters = []
     for cluster in points_in_cluster:
         num_points = len(cluster[0])
@@ -204,9 +205,7 @@ def cluster(img, pts, features, bandwidth, tau1, tau2, gamma_h, n_iterations = 1
                 clusters.extend(app)
             else:
                 clusters.append(cluster[0])
-    clusters = np.array(clusters)
     # END
-
     return clusters
 
 ### Part 2
@@ -268,78 +267,73 @@ def get_proposal(pts_cluster, tau_a, X):
     # YOU CODE HERE
     proposal = []
     
-    
-
-    N_a = len(pts_cluster) * 45
-        
     max_num_inlier = -1
     max_inliers = []
     max_triplet = []
     max_dist = -1
-        
-    for _ in range(N_a):
-        #Get a random point
-        ind = np.random.randint(0, len(pts_cluster))
-        point = pts_cluster[ind]
+    
+    for point in pts_cluster:
         
         #X-nearest points
-        X_nearest_ind = np.argsort(np.linalg.norm(pts_cluster - point, axis = 1).flatten())[:X]
+        X_nearest_ind = np.argsort(np.linalg.norm(pts_cluster - point, axis = 1))[:X + 1]
         X_nearest_pts = pts_cluster[X_nearest_ind]
         
+        #RANSAC Loop
+        for _ in range(45):       
+            #Determine A, B, C
+            rand_ind = np.random.randint(1, 10, size = 2)
+            indices = np.append(rand_ind, 0)
+            three_nearest_pts = X_nearest_pts[indices]
+            dists = []
+            for i in range(3):
+                for j in range(i + 1, 3):
+                    dists.append([(i,j), np.linalg.norm(three_nearest_pts[i] - three_nearest_pts[j])])
+            dists = np.array(dists)
+            max_ind = np.argmax(dists[:,1])
+            longest_edge = dists[max_ind][0]
+            triplet = []
+            if 0 not in longest_edge:
+                triplet = [three_nearest_pts[0], three_nearest_pts[longest_edge[0]], three_nearest_pts[longest_edge[1]]]
+            elif 1 not in longest_edge:
+                triplet = [three_nearest_pts[1], three_nearest_pts[longest_edge[0]], three_nearest_pts[longest_edge[1]]]
+            else:
+                triplet = [three_nearest_pts[2], three_nearest_pts[longest_edge[0]], three_nearest_pts[longest_edge[1]]]
+            
+            #Check angle
         
-        #Determine A, B, C
-        rand_ind = np.random.randint(1, X_nearest_ind.shape[0], size = 2)
-        indices = np.append(rand_ind, 0)
-        three_nearest_pts = X_nearest_pts[indices]
-        dists = []
-        for i in range(3):
-            for j in range(i+1, 3):
-                dists.append([(i,j), np.linalg.norm(three_nearest_pts[i] - three_nearest_pts[j])])
-        dists = np.array(dists)
-        max_ind = np.argmax(dists[:,1])
-        longest_edge = dists[max_ind][0]
-        triplet = []
-        if 0 not in longest_edge:
-            triplet = [three_nearest_pts[0], three_nearest_pts[longest_edge[0]], three_nearest_pts[longest_edge[1]]]
-        elif 1 not in longest_edge:
-            triplet = [three_nearest_pts[1], three_nearest_pts[longest_edge[0]], three_nearest_pts[longest_edge[1]]]
-        else:
-            triplet = [three_nearest_pts[2], three_nearest_pts[longest_edge[0]], three_nearest_pts[longest_edge[1]]]
-        
-        #Check angle
-       
-        if 20 < angle_bw_edges(triplet[0], triplet[1], triplet[2]) < 120:
-            #Find M
-            src = np.array(triplet).astype(np.float32)
-            dst = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
-            M = cv2.getAffineTransform(src, dst)
-                
-            #Transform Coords
-            transformed = transform(X_nearest_pts, M)
-            transformed_int = np.round(transformed).astype(np.int32)
-            unique_ind = np.unique(transformed_int, axis = 0, return_index = True)[1]
-                
-            #Remove duplicates
-            transformed_int = transformed_int[unique_ind]
-            transformed = transformed[unique_ind]
-                
-            diff = np.sum((transformed_int - transformed)**2, axis=1)
+            if 20 < angle_bw_edges(triplet[0], triplet[1], triplet[2]) < 120:
+                #Find M
+                src = np.array(triplet).astype(np.float32)
+                dst = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
+                M = cv2.getAffineTransform(src[:, [1,0]], dst)
                     
-            num_inliers = np.sum(diff < tau_a)
-            #print(f'Inliers : {num_inliers}')
-                
-            if num_inliers > max_num_inlier:    
-                max_num_inlier = num_inliers
-                max_inliers = [X_nearest_pts[unique_ind], transformed_int]
-                max_triplet = triplet
-                max_dist = np.sum(np.abs(dists[:,1]))
-        
-            elif num_inliers == max_num_inlier:
-                if np.sum(np.abs(dists[:,1])) < max_dist:
+                #Transform Coords
+                transformed = transform(X_nearest_pts, M)
+                transformed_int = np.round(transformed).astype(np.int32)
+                unique_ind = np.unique(transformed_int, axis = 0, return_index = True)[1]
+                    
+                #Remove duplicates
+                transformed_int = transformed_int[unique_ind]
+                transformed = transformed[unique_ind]
+                    
+                diff = np.sum((transformed_int - transformed)**2, axis=1)
+                        
+                num_inliers = np.sum(diff < tau_a)
+                #print(f'Inliers : {num_inliers}')
+                    
+                if num_inliers > max_num_inlier:    
                     max_num_inlier = num_inliers
                     max_inliers = [X_nearest_pts[unique_ind], transformed_int]
                     max_triplet = triplet
                     max_dist = np.sum(np.abs(dists[:,1]))
+            
+                elif num_inliers == max_num_inlier and np.sum(np.abs(dists[:,1])):
+                    max_num_inlier = num_inliers
+                    max_inliers = [X_nearest_pts[unique_ind], transformed_int]
+                    max_triplet = triplet
+                    max_dist = np.sum(np.abs(dists[:,1]))
+                else:
+                    pass
     
     basis = [[0,0], [1,0], [0,1]]
     for i in range(len(max_triplet)):
@@ -402,20 +396,20 @@ def find_texels(img, proposal, texel_size=50):
         sort_ind = np.argsort(selected_dist)[:3]
         sort_pt_int = selected_pt_int[sort_ind]
         sort_pt = selected_pt[sort_ind]
-        
         if sort_ind.shape[0] == 3:
             corners_src = sort_pt.astype(np.float32)
             point_fourth = corners_src[1] + (corners_src[0] - corners_src[1]) + (corners_src[2] - corners_src[1])
-            corners_src = np.append(corners_src, point_fourth).astype(np.float32)
+            point_fourth = np.expand_dims(point_fourth, axis = 0)
+            corners_src = np.append(corners_src, point_fourth, axis = 0)
             corners_dst = np.float32([[ 0,  0],
                           [texel_size,  0],
                           [texel_size, texel_size],
                           [0, texel_size]])
 
-            matrix_projective = cv2.getPerspectiveTransform(corners_src[:, [1, 0]], corners_dst) # transpose (h, w), as the input argument of cv2.getPerspectiveTransform is (w, h) ordering
+            matrix_projective = cv2.getPerspectiveTransform(corners_src[:, [1, 0]], corners_dst)
             img_demo_warped = cv2.warpPerspective(img, matrix_projective, (texel_size, texel_size))
             texels.append(img_demo_warped)
-        
+    texels = np.array(texels)
     # END
     return texels
 
@@ -440,7 +434,46 @@ def score_proposal(texels, a_score_count_min=3):
     K, U, V, C = texels.shape
 
     # YOUR CODE HERE
-
+    
+    
+    #Normalize Texels
+    for i in range(K):
+        if C == 3:
+            texels[i,:,:,0] = (texels[i,:,:,0] - np.mean(texels[i,:,:,0])) / (np.std(texels[i,:,:,0]) + 1e-10)
+            texels[i,:,:,1] = (texels[i,:,:,1] - np.mean(texels[i,:,:,1])) / (np.std(texels[i,:,:,1]) + 1e-10)
+            texels[i,:,:,2] = (texels[i,:,:,2] - np.mean(texels[i,:,:,2])) / (np.std(texels[i,:,:,2]) + 1e-10)
+        else:
+            texels[i,:,:,0] = (texels[i,:,:,0] - np.mean(texels[i,:,:,0])) / (np.std(texels[i,:,:,0]) + 1e-10)
+    
+    if K < a_score_count_min:
+        return 1000        
+    else:
+        if C == 3:
+            R = texels[:,:,:,0]
+            G = texels[:,:,:,1]
+            B = texels[:,:,:,2]
+            
+            a_score_r = float(0)
+            a_score_g = float(0)
+            a_score_b = float(0)
+            
+            for i in range(U):
+                a_score_r += np.std(R[:,i,i])
+                a_score_g += np.std(G[:,i,i])
+                a_score_b += np.std(B[:,i,i])
+            
+            a_score_r = a_score_r/(U * V * np.sqrt(K))
+            a_score_g = a_score_g/(U * V * np.sqrt(K))
+            a_score_b = a_score_b/(U * V * np.sqrt(K))
+            
+            a_score = (a_score_r + a_score_g + a_score_b ) / 3             
+        else:
+            a_score = 0
+            
+            for i in range(U):
+                a_score += np.std(texels[:,i,i])
+                    
+            a_score = a_score/(U * V * np.sqrt(K))
     # END
 
     return a_score
