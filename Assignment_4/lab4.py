@@ -137,7 +137,7 @@ def mean_shift_clustering(features, bandwidth, gamma_h = 1.1):
                 new_feature = numerator / denominator
                 new_centroids[i] = new_feature[0]
         temp_h = temp_h * gamma_h
-        if np.sum(np.abs(prev_centroids - new_centroids)) < 1e-6:
+        if np.sum(np.abs(prev_centroids - new_centroids)) < 1:
             prev_centroids = new_centroids
             break
         else:
