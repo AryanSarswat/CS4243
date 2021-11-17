@@ -337,12 +337,12 @@ def get_proposal(pts_cluster, tau_a, X):
     
     basis = [[0,0], [1,0], [0,1]]
     for i in range(len(max_triplet)):
-        proposal.append({'pt_int': basis[i], 'pt': max_triplet[i]})
+        proposal.append({'pt_int': basis[i], 'pt': max_triplet[i].astype(int)})
     
     if max_inliers != []: 
         for i in range(len(max_inliers[0])):
             if not (max_inliers[1][i].tolist() in basis):
-                proposal.append({'pt_int': max_inliers[1][i], 'pt': max_inliers[0][i]})
+                proposal.append({'pt_int': max_inliers[1][i], 'pt': max_inliers[0][i].astype(int)})
     # END
     return proposal
 
@@ -535,9 +535,9 @@ def template_match(img, proposal, threshold):
     # YOUR CODE HERE
     # proposal format = list of inliers {'pt_int': array([0, 0]), 'pt': array([ 51, 694])}. 'pt' is actual inlier
     # Take top 3 inliers (int(proposal[0]['pt'][1]), int(proposal[0]['pt'][0])), (int(proposal[1]['pt'][1]), int(proposal[1]['pt'][0])), (int(proposal[2]['pt'][1]), int(proposal[2]['pt'][0]))
-    a = [proposal[0]['pt'][1], proposal[0]['pt'][0]]
-    b = [proposal[1]['pt'][1], proposal[1]['pt'][0]]
-    c = [proposal[2]['pt'][1], proposal[2]['pt'][0]]
+    a = np.array([proposal[0]['pt'][1], proposal[0]['pt'][0]])
+    b = np.array([proposal[1]['pt'][1], proposal[1]['pt'][0]])
+    c = np.array([proposal[2]['pt'][1], proposal[2]['pt'][0]])
     # midpointBC = ((b[0] + c[0]) / 2, (b[1] + c[1]) / 2)
     # distAToMidBC = (midpointBC[0] - a[0], midpointBC[1] - a[1])
     # d = (midpointBC[0] + distAToMidBC, midpointBC[1] + distAToMidBC)
@@ -545,12 +545,16 @@ def template_match(img, proposal, threshold):
     d = a + (b - a) + (c - a)
 
     # Template left top edge = (b_x, d_y), right bottom edge = (c_x, a_y)
-    template = img[d[1]:a[1], b[0]:c[0], :]
+    minY = min(d[1], a[1])
+    maxY = max(d[1], a[1])
+    minX = min(b[0], c[0])
+    maxX = max(b[0], c[0])
+    template = img[minY:maxY, minX:maxX, :]
     top_bottom_pad = int(template.shape[0] / 2)
     left_right_pad = int(template.shape[1] / 2)
     img_padded = cv2.copyMakeBorder(img, top_bottom_pad, top_bottom_pad, left_right_pad, left_right_pad, cv2.BORDER_CONSTANT, None, 0)
     response = cv2.matchTemplate(img_padded, template, cv2.TM_CCOEFF_NORMED)
-    response = non_max_suppression(response, template.shape, threshold)
+    response = non_max_suppression(response, template.shape[:2], threshold)
 
     # END
     return response
@@ -570,30 +574,31 @@ def maxima2grid(img, proposal, response):
     
     """
     # YOUR CODE HERE
-    a = [proposal[0]['pt'][1], proposal[0]['pt'][0]]
-    b = [proposal[1]['pt'][1], proposal[1]['pt'][0]]
-    c = [proposal[2]['pt'][1], proposal[2]['pt'][0]]
+    a = np.array([proposal[0]['pt'][1], proposal[0]['pt'][0]])
+    b = np.array([proposal[1]['pt'][1], proposal[1]['pt'][0]])
+    c = np.array([proposal[2]['pt'][1], proposal[2]['pt'][0]])
     d = a + (b - a) + (c - a)
     offset1 = (d - a) / 2
     offset2 = (c - b) / 2
 
     points_grid = []
     maxima = []
-    for i, j in response.shape:
-        if response[i, j] > 0:
-            maxima.append([i, j])
-            center = np.array([i, j])
-            points_grid.append(center - offset1)
-            points_grid.append(center + offset1)
-            points_grid.append(center - offset2)
-            points_grid.append(center + offset2)
+    for i in range(response.shape[0]):
+        for j in range(response.shape[1]):
+            if response[i, j] > 0:
+                maxima.append([i, j])
+                center = np.array([i, j])
+                points_grid.append(center - offset1)
+                points_grid.append(center + offset1)
+                points_grid.append(center - offset2)
+                points_grid.append(center + offset2)
     points_grid = np.array(points_grid)
     maxima = np.array(maxima)
     # END
 
-    return points_grid, maxima
+    return points_grid #, maxima
 
-def refine_grid(img, proposal, points_grid, maxima):
+def refine_grid(img, proposal, points_grid):
     """
     Refine the detected grid points.
 
@@ -604,29 +609,42 @@ def refine_grid(img, proposal, points_grid, maxima):
         points: A numpy ndarray of shape (N, 2), where N is the number of refined grid points.
     """
     # YOUR CODE HERE
-    a = [proposal[0]['pt'][1], proposal[0]['pt'][0]]
-    b = [proposal[1]['pt'][1], proposal[1]['pt'][0]]
-    c = [proposal[2]['pt'][1], proposal[2]['pt'][0]]
+    a = np.array([proposal[0]['pt'][1], proposal[0]['pt'][0]])
+    b = np.array([proposal[1]['pt'][1], proposal[1]['pt'][0]])
+    c = np.array([proposal[2]['pt'][1], proposal[2]['pt'][0]])
     d = a + (b - a) + (c - a)
     points = []
 
-    merge_points = []
+    merge_points_list = []
     # points = np.unique(points_grid, axis=0)
+    isOverlap = False
     for i in range(0, points_grid.shape[0]-1):
-        for j in range(i+1, points_grid.shape):
-            if points_grid[i] == points_grid[j]:
-                merge_points.append([i, j])
+        for j in range(i+1, points_grid.shape[0]):
+            if np.linalg.norm(points_grid[i] - points_grid[j]) < 25:
+                merge1 = points_grid[i]
+                merge2 = points_grid[j]
+                midpoint = [(merge1[0] + merge2[0]) / 2, (merge1[1] + merge2[1]) / 2]
+                points.append(midpoint)
+                isOverlap = True
                 break
-        points.append(points_grid[i])
-    
-    for merge_point in merge_points:
-        # Every 4 grid points produced from one maximum
-        maxi1 = maxima[merge_point[0] / 4]
-        maxi2 = maxima[merge_point[1] / 4]
-        new_point = (maxi1 + maxi2) / 2
-        points.append(new_point)
+        if not isOverlap:
+            points.append(points_grid[i])   # Append grid points with no overlap
+            isOverlap = False
 
-    points = np.array(points)
+    # for merge_points in merge_points_list:
+    #     merge1 = points_grid[merge_points[0]]
+    #     merge2 = points_grid[merge_points[1]]
+    #     midpoint = [(merge1[0] + merge2[0]) / 2, (merge1[1] + merge2[1]) / 2]
+    #     points.append(midpoint) # Append midpoint of overlapping grid points
+    
+    # for merge_point in merge_points:
+    #     # Every 4 grid points produced from one maximum
+    #     maxi1 = maxima[merge_point[0] / 4]
+    #     maxi2 = maxima[merge_point[1] / 4]
+    #     new_point = (maxi1 + maxi2) / 2
+    #     points.append(new_point)
+
+    points = np.array(points).astype(int)
     # END
 
     return points
@@ -652,9 +670,9 @@ def grid2latticeunit(img, proposal, points):
     """
 
     # # YOUR CODE HERE
-    a = [proposal[0]['pt'][1], proposal[0]['pt'][0]]
-    b = [proposal[1]['pt'][1], proposal[1]['pt'][0]]
-    c = [proposal[2]['pt'][1], proposal[2]['pt'][0]]
+    a = np.array([proposal[0]['pt'][1], proposal[0]['pt'][0]])
+    b = np.array([proposal[1]['pt'][1], proposal[1]['pt'][0]])
+    c = np.array([proposal[2]['pt'][1], proposal[2]['pt'][0]])
     
     ori_grid = np.array([a, b, c]).astype(np.float32)
     final_grid = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
@@ -664,8 +682,8 @@ def grid2latticeunit(img, proposal, points):
     # Transform each pair of grid points & check their distance
     for i in range(points.shape[0]-1):
         for j in range(i+1, points.shape[0]):
-            affine_i = transform(points[i])
-            affine_j = transform(points[j])
+            affine_i = transform([points[i]], M)
+            affine_j = transform([points[j]], M)
             if int(np.linalg.norm(affine_i - affine_j)) == 1:
                 edges.append([points[i], points[j]])
 
