@@ -544,15 +544,24 @@ def template_match(img, proposal, threshold):
 
     d = a + (b - a) + (c - a)
 
-    # Template left top edge = (b_x, d_y), right bottom edge = (c_x, a_y)
-    minY = min(d[1], a[1])
-    maxY = max(d[1], a[1])
-    minX = min(b[0], c[0])
-    maxX = max(b[0], c[0])
+    # # Depending on orientation
+    # # Template left top edge = (b_x, d_y), right bottom edge = (c_x, a_y)
+    # # OR Template left top edge = (d_x, b_y), right bottom edge = (a_x, c_y)
+    # # a and d, b and c possible pairings
+    # minY = min(d[1], a[1]) if min(d[1], a[1]) <= min(b[0], c[0]) else min(b[0], c[0])
+    # maxY = max(d[1], a[1]) if max(d[1], a[1]) > max(b[0], c[0]) else max(b[0], c[0])
+    # minX = min(b[0], c[0]) if min(d[1], a[1]) <= min(b[0], c[0]) else min(d[1], a[1])
+    # maxX = max(b[0], c[0]) if max(d[1], a[1]) > max(b[0], c[0]) else max(d[1], a[1])
+    minY = min(a[1], b[1], c[1], d[1])
+    maxY = max(a[1], b[1], c[1], d[1])
+    minX = min(a[0], b[0], c[0], d[0])
+    maxX = max(a[0], b[0], c[0], d[0])
     template = img[minY:maxY, minX:maxX, :]
     top_bottom_pad = int(template.shape[0] / 2)
     left_right_pad = int(template.shape[1] / 2)
     img_padded = cv2.copyMakeBorder(img, top_bottom_pad, top_bottom_pad, left_right_pad, left_right_pad, cv2.BORDER_CONSTANT, None, 0)
+    # print(a, b, c, d)
+    # print(img.shape, img_padded.shape, template.shape)
     response = cv2.matchTemplate(img_padded, template, cv2.TM_CCOEFF_NORMED)
     response = non_max_suppression(response, template.shape[:2], threshold)
 
@@ -618,18 +627,19 @@ def refine_grid(img, proposal, points_grid):
     merge_points_list = []
     # points = np.unique(points_grid, axis=0)
     isOverlap = False
-    for i in range(0, points_grid.shape[0]-1):
-        for j in range(i+1, points_grid.shape[0]):
-            if np.linalg.norm(points_grid[i] - points_grid[j]) < 25:
-                merge1 = points_grid[i]
-                merge2 = points_grid[j]
+    for i in range(points_grid.shape[0]):
+        for j in range(points_grid.shape[0]):
+            merge1 = points_grid[i]
+            merge2 = points_grid[j]
+            if np.array_equal(merge1, merge2):
+                continue
+            if np.linalg.norm(merge1 - merge2) < 25:
                 midpoint = [(merge1[0] + merge2[0]) / 2, (merge1[1] + merge2[1]) / 2]
                 points.append(midpoint)
                 isOverlap = True
-                break
         if not isOverlap:
             points.append(points_grid[i])   # Append grid points with no overlap
-            isOverlap = False
+        isOverlap = False
 
     # for merge_points in merge_points_list:
     #     merge1 = points_grid[merge_points[0]]
