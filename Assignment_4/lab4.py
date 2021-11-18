@@ -624,35 +624,49 @@ def refine_grid(img, proposal, points_grid):
     d = a + (b - a) + (c - a)
     points = []
 
-    merge_points_list = []
-    # points = np.unique(points_grid, axis=0)
+    # MERGE OVERLAPPING POINTS
     isOverlap = False
-    for i in range(points_grid.shape[0]):
-        for j in range(points_grid.shape[0]):
+    for i in range(points_grid.shape[0]-1):
+        for j in range(i+1, points_grid.shape[0]):
             merge1 = points_grid[i]
             merge2 = points_grid[j]
             if np.array_equal(merge1, merge2):
                 continue
+            
+            # Overlap if points are < 0.5 * texel size distance apart
             if np.linalg.norm(merge1 - merge2) < 25:
                 midpoint = [(merge1[0] + merge2[0]) / 2, (merge1[1] + merge2[1]) / 2]
                 points.append(midpoint)
                 isOverlap = True
+
         if not isOverlap:
             points.append(points_grid[i])   # Append grid points with no overlap
         isOverlap = False
 
-    # for merge_points in merge_points_list:
-    #     merge1 = points_grid[merge_points[0]]
-    #     merge2 = points_grid[merge_points[1]]
-    #     midpoint = [(merge1[0] + merge2[0]) / 2, (merge1[1] + merge2[1]) / 2]
-    #     points.append(midpoint) # Append midpoint of overlapping grid points
-    
-    # for merge_point in merge_points:
-    #     # Every 4 grid points produced from one maximum
-    #     maxi1 = maxima[merge_point[0] / 4]
-    #     maxi2 = maxima[merge_point[1] / 4]
-    #     new_point = (maxi1 + maxi2) / 2
-    #     points.append(new_point)
+    # INTERPOLATE MISSING POINTS
+    # Check whether there are missing points with template size distances in all 4 directions of each existing point
+    # h_offset = d - a if a[1] > b[1] or a[1] > c[1] else b - c # x-direction offset
+    # v_offset = d - a if a[1] <= b[1] or a[1] <= c[1] else b - c
+    offset1 = d - a
+    offset2 = b - c
+    points_copy = points.copy()
+    for point in points_copy:
+        adj1 = np.array(point) + offset1
+        adj2 = np.array(point) - offset1
+        adj3 = np.array(point) + offset2
+        adj4 = np.array(point) - offset2
+        to_add = [adj1, adj2, adj3, adj4]
+        add_bool = [True, True, True, True]
+
+        for other in points:
+            for i in range(len(to_add)):
+                # If there is a point of distance 0.5 * texel size near where point should be, don't interpolate
+                if np.linalg.norm(to_add[i] - other) < 25:
+                    add_bool[i] = False
+        
+        for j in range(len(add_bool)):
+            if add_bool[j]:
+                points.append(to_add[j])
 
     points = np.array(points).astype(int)
     # END
@@ -694,7 +708,8 @@ def grid2latticeunit(img, proposal, points):
         for j in range(i+1, points.shape[0]):
             affine_i = transform([points[i]], M)
             affine_j = transform([points[j]], M)
-            if int(np.linalg.norm(affine_i - affine_j)) == 1:
+            # if np.linalg.norm(affine_i - affine_j) <= 1:
+            if np.sum(np.abs(affine_i - affine_j)) < 1:
                 edges.append([points[i], points[j]])
 
     return edges
