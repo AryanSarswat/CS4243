@@ -626,6 +626,7 @@ def refine_grid(img, proposal, points_grid):
     points = []
 
     # MERGE OVERLAPPING POINTS
+    merged_points = [False for r in range(points_grid.shape[0])]
     isOverlap = False
     for i in range(points_grid.shape[0]-1):
         for j in range(i+1, points_grid.shape[0]):
@@ -638,9 +639,12 @@ def refine_grid(img, proposal, points_grid):
             if np.linalg.norm(merge1 - merge2) < 25:
                 midpoint = [(merge1[0] + merge2[0]) / 2, (merge1[1] + merge2[1]) / 2]
                 points.append(midpoint)
+                # Indicate points merged so not re-added when they are source point i
+                merged_points[i] = True
+                merged_points[j] = True
                 isOverlap = True
 
-        if not isOverlap:
+        if not isOverlap and not merged_points[i]:
             points.append(points_grid[i])   # Append grid points with no overlap
         isOverlap = False
 
