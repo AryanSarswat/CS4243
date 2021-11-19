@@ -3,6 +3,7 @@ import numpy as np
 import math
 from numpy import core
 from sklearn.cluster import KMeans
+from collections import deque
 
 ### Part 1
 
@@ -658,11 +659,12 @@ def refine_grid(img, proposal, points_grid):
         to_add = [adj1, adj2, adj3, adj4]
         add_bool = [True, True, True, True]
 
-        for other in points:
-            for i in range(len(to_add)):
+        for i in range(len(to_add)):
+            for other in points:
                 # If there is a point of distance 0.5 * texel size near where point should be, don't interpolate
                 if np.linalg.norm(to_add[i] - other) < 25:
                     add_bool[i] = False
+                    break
         
         for j in range(len(add_bool)):
             if add_bool[j]:
@@ -697,20 +699,66 @@ def grid2latticeunit(img, proposal, points):
     a = np.array([proposal[0]['pt'][1], proposal[0]['pt'][0]])
     b = np.array([proposal[1]['pt'][1], proposal[1]['pt'][0]])
     c = np.array([proposal[2]['pt'][1], proposal[2]['pt'][0]])
-    
-    ori_grid = np.array([a, b, c]).astype(np.float32)
-    final_grid = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
-    M = cv2.getAffineTransform(ori_grid, final_grid)
-
+    d = a + (b - a) + (c - a)
     edges = []
-    # Transform each pair of grid points & check their distance
-    for i in range(points.shape[0]-1):
-        for j in range(i+1, points.shape[0]):
-            affine_i = transform([points[i]], M)
-            affine_j = transform([points[j]], M)
-            # if np.linalg.norm(affine_i - affine_j) <= 1:
-            if np.sum(np.abs(affine_i - affine_j)) < 1:
-                edges.append([points[i], points[j]])
+
+    # ori_grid = np.array([a, b, c]).astype(np.float32)
+    # final_grid = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
+    # M = cv2.getAffineTransform(ori_grid, final_grid)
+
+    offset1 = (d - a) / 2 + (b - c) / 2
+    offset2 = (d - a) / 2 - (b - c) / 2
+    # For each point, get edges with closest points formed from adjacent maxima
+    for point in points:
+        closest1 = np.array(point) + offset1
+        closest2 = np.array(point) - offset1
+        closest3 = np.array(point) + offset2
+        closest4 = np.array(point) - offset2
+        closest_list = [closest1, closest2, closest3, closest4]
+
+        for i in range(len(closest_list)):
+            for other in points:
+                # Add edge for points within texel size area near supposed point
+                if np.linalg.norm(closest_list[i] - other) < 25:
+                    edges.append([point, other])
+                    break
+
+    # mapped_bool = [False for i in range(points.shape[0])]
+    # lattice = deque([{'mapped': [0, 0], 'original': points[0]}])
+    # mapped_bool[0] = True
+    # while False in mapped_bool:
+    #     src = np.array(lattice.popleft()['original'])
+    #     two_nearest_ind = np.argsort(np.linalg.norm(points - src, axis=1))[:2]
+    #     two_nearest = points[two_nearest_ind]
+    #     ori_grid = np.array([src, two_nearest[0], two_nearest[1]]).astype(np.float32)
+    #     final_grid = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
+    #     M = cv2.getAffineTransform(ori_grid, final_grid)
+    #     lattice.append({'mapped': transform([two_nearest[0]], M), 'original': src})
+    #     lattice.append({'mapped': transform([two_nearest[1]], M), 'original': src})
+    #     mapped_bool[two_nearest_ind[0]] = True
+    #     mapped_bool[two_nearest_ind[1]] = True
+    
+    # edges = []
+    # # Transform each pair of grid points & check their distance
+    # for i in range(lattice.shape[0]-1):
+    #     for j in range(i+1, lattice.shape[0]):
+    #         affine1 = lattice[i]['mapped']
+    #         affine2 = lattice[j]['mapped']
+    #         # if np.linalg.norm(affine1 - affine2) <= 1:
+    #         # Manhattan Distance
+    #         if np.sum(np.abs(affine1 - affine2)) <= 1:
+    #             edges.append([lattice[i]['original'], lattice[j]['original']])
+
+    # edges = []
+    # # Transform each pair of grid points & check their distance
+    # for i in range(points.shape[0]-1):
+    #     for j in range(i+1, points.shape[0]):
+    #         affine_i = transform([points[i]], M)
+    #         affine_j = transform([points[j]], M)
+    #         # if np.linalg.norm(affine_i - affine_j) <= 1:
+    #         # Manhattan Distance
+    #         if np.sum(np.abs(affine_i - affine_j)) <= 1:
+    #             edges.append([points[i], points[j]])
 
     return edges
 
